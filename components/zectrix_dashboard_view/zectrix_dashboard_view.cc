@@ -217,12 +217,6 @@ void DrawWeatherIcon(ZectrixCanvas& canvas, int cx, int cy, int code) {
     }
 }
 
-// Minutes since midnight for an "HH:MM" string.
-int MinutesOfDay(const char* time) {
-    return ((time[0] - '0') * 10 + (time[1] - '0')) * 60 +
-           (time[3] - '0') * 10 + (time[4] - '0');
-}
-
 // Train status, right-aligned to the card's inner edge.
 void DrawStatus(ZectrixCanvas& canvas, int y, const char* text) {
     canvas.Text(384 - canvas.TextWidth(text), y, text);
@@ -335,20 +329,16 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
                           train.expected[0], train.expected[1],
                           train.expected[3], train.expected[4]);
 
-            // Lead with the time it will actually leave; a strikethrough
-            // made "10h11" read as "10h44".
-            int late = MinutesOfDay(train.expected) -
-                       MinutesOfDay(train.scheduled);
-            if (late < -720) {
-                late += 1440;
-            } else if (late > 720) {
-                late -= 1440;
-            }
-            char status[16];
-            std::snprintf(status, sizeof(status), "%+d min", late);
+            // Lead with the time it will actually leave, highlighted so a
+            // revised time stands out, and keep the timetabled one small.
+            // (A strikethrough made "10h11" read as "10h44".)
+            char was[12];
+            std::snprintf(was, sizeof(was), "was %s", scheduled);
 
-            canvas.Text(256, y, expected);
-            DrawStatus(canvas, y, status);
+            const int width = canvas.TextWidth(expected);
+            canvas.FillRect(254, y - 1, width + 4, 18, true);
+            canvas.Text(256, y, expected, 1, true);
+            DrawStatus(canvas, y, was);
         }
     }
 }
