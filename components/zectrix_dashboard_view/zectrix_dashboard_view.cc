@@ -329,15 +329,13 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
                           train.expected[0], train.expected[1],
                           train.expected[3], train.expected[4]);
 
-            // New time first, then an arrow back from the struck-out
-            // timetabled time. The strike is diagonal: a horizontal one
-            // joins the top stroke of each "1" into a "4" ("10h11" read
-            // as "10h44").
-            canvas.Text(256, y, expected);
-            canvas.Text(306, y, "<-");
-            const int old_x = 384 - canvas.TextWidth(scheduled);
-            canvas.Text(old_x, y, scheduled);
-            canvas.Line(old_x - 1, y + 13, 385, y + 2);
+            // Struck-out timetabled time -> predicted time. The strike is
+            // diagonal: a horizontal one joins the top stroke of each "1"
+            // into a "4" ("10h11" read as "10h44").
+            canvas.Text(256, y, scheduled);
+            canvas.Line(255, y + 13, 257 + canvas.TextWidth(scheduled), y + 2);
+            canvas.Text(304, y, "->");
+            canvas.Text(328, y, expected);
         }
     }
 }
