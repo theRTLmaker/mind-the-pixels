@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "zectrix_ascii_font_8x16.h"
+
 // Dashboard: wide weather, compact trains and clock, larger events.
 
 namespace {
@@ -217,6 +219,59 @@ void DrawWeatherIcon(ZectrixCanvas& canvas, int cx, int cy, int code) {
     }
 }
 
+// Gray for labels and secondary text, and for hairline dividers.
+constexpr uint8_t kLabel = 6;
+constexpr uint8_t kRule = 10;
+
+// TRMNL16 text in a gray level. Only for areas outside the partial-refresh
+// windows, which must stay pure black and white.
+void TextGray(ZectrixCanvas& canvas, int x, int y, const char* text,
+              uint8_t level) {
+    for (const unsigned char* cursor =
+             reinterpret_cast<const unsigned char*>(text);
+         *cursor != '\0'; ++cursor) {
+        unsigned char code = *cursor;
+        if (code < 0x20 || code > 0x7e) {
+            code = '?';
+        }
+        const uint16_t* glyph = kZectrixAsciiFont8x16[code - 0x20];
+        const int width = kZectrixAsciiFontWidths[code - 0x20];
+        for (int row = 0; row < 16; ++row) {
+            for (int column = 0; column < width; ++column) {
+                if (glyph[row] & (1U << (15 - column))) {
+                    canvas.GrayPixel(x + column, y + row, level);
+                }
+            }
+        }
+        x += width;
+    }
+}
+
+// Degree sign: a small ring whose top-left is at (x, y).
+void DrawDegree(ZectrixCanvas& canvas, int x, int y, int r, int thickness,
+                uint8_t level) {
+    FillCircle(canvas, x + r, y + r, r, level);
+    FillCircle(canvas, x + r, y + r, r - thickness, 15);
+}
+
+// Small solid triangle, pointing up or down, centred on cx.
+void DrawArrow(ZectrixCanvas& canvas, int cx, int top, bool up,
+               uint8_t level) {
+    for (int row = 0; row < 5; ++row) {
+        const int half = up ? row : 4 - row;
+        canvas.FillRectGray(cx - half, top + row, half * 2 + 1, 1, level);
+    }
+}
+
+// Hour from "HH:MM", or -1 when the clock is not set yet.
+int HourFromClock(const char* clock_text) {
+    if (clock_text == nullptr || clock_text[0] < '0' || clock_text[0] > '9' ||
+        clock_text[1] < '0' || clock_text[1] > '9') {
+        return -1;
+    }
+    return (clock_text[0] - '0') * 10 + (clock_text[1] - '0');
+}
+
 // Train status, right-aligned to the card's inner edge.
 void DrawStatus(ZectrixCanvas& canvas, int y, const char* text) {
     canvas.Text(384 - canvas.TextWidth(text), y, text);
@@ -225,52 +280,67 @@ void DrawStatus(ZectrixCanvas& canvas, int y, const char* text) {
 }  // namespace
 
 void ZectrixDashboardDrawWeather(ZectrixCanvas& canvas,
-                                 const zectrix_weather_data_t* weather) {
-    // Top-left: weather.
-    canvas.Rect(8, 8, 232, 140);
-    canvas.Text(16, 15, "WEATHER");
-
+                                 const zectrix_weather_data_t* weather,
+                                 int current_hour) {
+    // Top-left, no box: icon and temperature, then either the hourly rain
+    // chart (rainy days) or humidity and wind (dry days).
     if (weather == nullptr) {
-        canvas.Text(16, 55, "Weather unavailable");
-        canvas.Text(16, 77, "Check Wi-Fi");
+        canvas.Text(12, 40, "Weather unavailable");
+        TextGray(canvas, 12, 60, "Check Wi-Fi", kLabel);
         return;
     }
 
-    DrawWeatherIcon(canvas, 44, 66, weather->weather_code);
+    DrawWeatherIcon(canvas, 40, 44, weather->weather_code);
 
-    char temperature[24];
-    char range[32];
-    char rain[24];
-    char feels_like[32];
-    char conditions[32];
+    // Current temperature, large, with the day's high over low beside it.
+    char temperature[16];
+    std::snprintf(temperature, sizeof(temperature), "%.1f",
+                  weather->temperature_c);
+    canvas.Text(78, 10, temperature, 2);
+    const int degree_x = 78 + canvas.TextWidth(temperature, 2) + 2;
+    DrawDegree(canvas, degree_x, 14, 3, 2, kInk);
 
-    std::snprintf(temperature, sizeof(temperature),
-                  "%.1f C", weather->temperature_c);
-    std::snprintf(range, sizeof(range), "L %.0f H %.0f C",
-                  weather->min_temperature_c,
-                  weather->max_temperature_c);
-    std::snprintf(rain, sizeof(rain), "Rain today %d%%",
-                  weather->rain_probability_percent);
-    std::snprintf(feels_like, sizeof(feels_like),
-                  "Feels %.1f C", weather->feels_like_c);
-    std::snprintf(conditions, sizeof(conditions),
-                  "RH %d%% Wind %.0fkm/h",
-                  weather->humidity_percent, weather->wind_speed_kmh);
+    char high[8];
+    char low[8];
+    std::snprintf(high, sizeof(high), "%.0f", weather->max_temperature_c);
+    std::snprintf(low, sizeof(low), "%.0f", weather->min_temperature_c);
+    const int range_x = degree_x + 16;
+    DrawArrow(canvas, range_x + 3, 14, true, kInk);
+    canvas.Text(range_x + 10, 8, high);
+    DrawArrow(canvas, range_x + 3, 32, false, kInk);
+    canvas.Text(range_x + 10, 26, low);
 
-    canvas.Text(82, 43, temperature, 2);
-    canvas.Text(82, 79, range);
-    canvas.Text(82, 95, rain);
-    canvas.Text(82, 111, feels_like);
-    canvas.Text(82, 127, conditions);
+    char feels[24];
+    std::snprintf(feels, sizeof(feels), "%.1f", weather->feels_like_c);
+    TextGray(canvas, 80, 48, "Feels like", kLabel);
+    const int feels_x = 80 + canvas.TextWidth("Feels like ");
+    canvas.Text(feels_x, 48, feels);
+    DrawDegree(canvas, feels_x + canvas.TextWidth(feels) + 1, 50, 2, 1, kInk);
+
+    if (ZectrixDashboardHasRain(weather)) {
+        ZectrixDashboardDrawRainChart(canvas, *weather, current_hour);
+        return;
+    }
+
+    char humidity[16];
+    char wind[16];
+    std::snprintf(humidity, sizeof(humidity), "%d%%",
+                  weather->humidity_percent);
+    std::snprintf(wind, sizeof(wind), "%.0f km/h", weather->wind_speed_kmh);
+    canvas.Text(12, 88, "No rain today");
+    TextGray(canvas, 12, 108, "Humidity", kLabel);
+    canvas.Text(92, 108, humidity);
+    TextGray(canvas, 12, 128, "Wind", kLabel);
+    canvas.Text(92, 128, wind);
 }
 
 void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
                                 const zectrix_trains_data_t& trains) {
-    // Top-right: train departures.
+    // Top-right: train departures. Black and white only: this area is
+    // updated with partial refreshes.
     canvas.FillRect(248, 34, 144, 114, false);
-    canvas.Rect(248, 34, 144, 114);
-    canvas.Text(256, 41, "TRAINS -> ST PAN");
-    canvas.Line(256, 59, 384, 59);
+    canvas.Text(256, 40, "To St Pancras");
+    canvas.Line(256, 58, 384, 58);
 
     if (!trains.valid) {
         if (trains.failed_fetches == 0) {
@@ -289,12 +359,11 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
         if (trains.failed_fetches >= kTrainsStaleAfterFailures) {
             std::snprintf(footer, sizeof(footer), "OLD - from %s",
                           trains.updated);
-            canvas.FillRect(249, 129, 142, 18, true);
+            canvas.FillRect(250, 129, 140, 18, true);
             canvas.Text(256, 130, footer, 1, true);
         } else {
             std::snprintf(footer, sizeof(footer), "Updated %s",
                           trains.updated);
-            canvas.Line(256, 128, 384, 128);
             DrawStatus(canvas, 130, footer);
         }
     }
@@ -312,8 +381,6 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
         std::snprintf(scheduled, sizeof(scheduled), "%c%ch%c%c",
                       train.scheduled[0], train.scheduled[1],
                       train.scheduled[3], train.scheduled[4]);
-
-        canvas.FillRect(256, y, 128, 18, false);
 
         if (train.cancelled) {
             canvas.Text(256, y, scheduled);
@@ -340,17 +407,12 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
     }
 }
 
-void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas,
-                                bool leave_room_for_rain) {
-    // Bottom: events and recommendations.
-    canvas.Rect(8, 158, 384, 132);
-    canvas.Text(16, 166, "COMING UP");
-    canvas.Line(16, 185, 384, 185);
-    canvas.Text(16, 194, "Events for you and Margarida");
-    canvas.Text(16, 216, "Calendar not connected");
-    if (!leave_room_for_rain) {
-        canvas.Text(16, 238, "Recommendations not connected");
-    }
+void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas) {
+    // Bottom: events and recommendations, below a hairline.
+    TextGray(canvas, 12, 166, "Coming up", kLabel);
+    canvas.Text(12, 190, "Events for you and Margarida");
+    TextGray(canvas, 12, 212, "Calendar not connected", kLabel);
+    TextGray(canvas, 12, 234, "Recommendations not connected", kLabel);
 }
 
 bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather) {
@@ -368,29 +430,39 @@ bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather) {
 void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
                                    const zectrix_weather_data_t& weather,
                                    int current_hour) {
-    // One bar per hour, 0-100% over kBarMax pixels, labelled every 6 h.
-    constexpr int kLeft = 72;
-    constexpr int kPitch = 13;
-    constexpr int kBarWidth = 10;
-    constexpr int kBaseline = 269;
-    constexpr int kBarMax = 30;
-
-    canvas.Line(16, 236, 384, 236);
+    // Lower part of the weather area: one bar per hour, 0-100% over
+    // kBarMax pixels, labelled every 6 h.
+    constexpr int kLeft = 12;
+    constexpr int kPitch = 9;
+    constexpr int kBarWidth = 7;
+    constexpr int kRight = kLeft + 23 * kPitch + kBarWidth;
+    constexpr int kBaseline = 128;
+    constexpr int kBarMax = 28;
 
     int peak = 0;
+    int peak_hour = 0;
     for (int hour = 0; hour < ZECTRIX_WEATHER_HOURS; ++hour) {
-        peak = std::max(peak, weather.hourly_rain_percent[hour]);
+        if (weather.hourly_rain_percent[hour] > peak) {
+            peak = weather.hourly_rain_percent[hour];
+            peak_hour = hour;
+        }
     }
-    char peak_text[8];
-    std::snprintf(peak_text, sizeof(peak_text), "%d%%", peak);
-    canvas.Text(16, 242, "RAIN");
-    canvas.Text(16, 260, peak_text);
+    char peak_text[24];
+    std::snprintf(peak_text, sizeof(peak_text), "%d%% at %02dh", peak,
+                  peak_hour);
+    // Open-Meteo's probability covers any precipitation; call it snow on
+    // snowy days.
+    const int code = weather.weather_code;
+    const char* label = ((code >= 71 && code <= 77) ||
+                         (code >= 85 && code <= 86)) ? "Snow" : "Rain";
+    TextGray(canvas, kLeft, 76, label, kLabel);
+    canvas.Text(kLeft + canvas.TextWidth(label) + 4, 76, peak_text);
 
     // Dotted 50% guide, then the baseline.
-    for (int x = kLeft; x < 384; x += 3) {
-        canvas.Pixel(x, kBaseline - kBarMax / 2, true);
+    for (int x = kLeft; x < kRight; x += 3) {
+        canvas.GrayPixel(x, kBaseline - kBarMax / 2, kRule);
     }
-    canvas.Line(kLeft, kBaseline, 383, kBaseline);
+    canvas.FillRectGray(kLeft, kBaseline, kRight - kLeft, 1, kSoftInk);
 
     for (int hour = 0; hour < ZECTRIX_WEATHER_HOURS; ++hour) {
         const int x = kLeft + hour * kPitch;
@@ -403,17 +475,13 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
                                 past ? 12 : (percent >= 50 ? 3 : 7));
         }
         if (hour == current_hour) {
-            // "Now" marker: a small triangle on the baseline.
-            for (int row = 0; row < 4; ++row) {
-                canvas.FillRect(x + kBarWidth / 2 - row, kBaseline + 1 + row,
-                                row * 2 + 1, 1, true);
-            }
+            // "Now" marker: a small triangle under the baseline.
+            DrawArrow(canvas, x + kBarWidth / 2, kBaseline + 2, true, kInk);
         }
         if (hour % 6 == 0) {
             char label[4];
             std::snprintf(label, sizeof(label), "%02d", hour);
-            canvas.Text(x + kBarWidth / 2 - canvas.TextWidth(label) / 2,
-                        kBaseline + 2, label);
+            TextGray(canvas, x, kBaseline + 4, label, kLabel);
         }
     }
 }
@@ -430,19 +498,12 @@ void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
                              const zectrix_trains_data_t& trains,
                              const char* clock_text) {
     canvas.Clear();
-    ZectrixDashboardDrawWeather(canvas, weather);
+    ZectrixDashboardDrawWeather(canvas, weather, HourFromClock(clock_text));
     ZectrixDashboardDrawTrains(canvas, trains);
-    const bool rain = ZectrixDashboardHasRain(weather);
-    ZectrixDashboardDrawEvents(canvas, rain);
-    if (rain) {
-        // The hour comes from the clock text ("HH:MM"), when it is set.
-        int hour = -1;
-        if (clock_text != nullptr && clock_text[0] >= '0' &&
-            clock_text[0] <= '9' && clock_text[1] >= '0' &&
-            clock_text[1] <= '9') {
-            hour = (clock_text[0] - '0') * 10 + (clock_text[1] - '0');
-        }
-        ZectrixDashboardDrawRainChart(canvas, *weather, hour);
-    }
+    ZectrixDashboardDrawEvents(canvas);
     ZectrixDashboardDrawClock(canvas, clock_text);
+
+    // Hairlines instead of boxes, kept outside the partial-refresh windows.
+    canvas.FillRectGray(243, 12, 1, 136, kRule);
+    canvas.FillRectGray(12, 156, 376, 1, kRule);
 }

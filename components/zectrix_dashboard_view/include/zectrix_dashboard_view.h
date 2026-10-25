@@ -22,23 +22,24 @@ inline constexpr ZectrixDashboardRect kDashboardTrainsRefreshRect = {
 inline constexpr ZectrixDashboardRect kDashboardClockRefreshRect = {
     248, 0, 152, 32};
 
-// Weather panel. Pass nullptr when the weather fetch failed.
+// Weather area. Pass nullptr when the weather fetch failed. On days with
+// rain the hourly chart replaces humidity and wind; hours before
+// current_hour are drawn lighter (-1 when unknown).
 void ZectrixDashboardDrawWeather(ZectrixCanvas& canvas,
-                                 const zectrix_weather_data_t* weather);
+                                 const zectrix_weather_data_t* weather,
+                                 int current_hour = -1);
 
 // Train card. Clears its own area so it can be redrawn in place.
 void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
                                 const zectrix_trains_data_t& trains);
 
-// Events panel (placeholder until the calendar is connected). Leaves its
-// lower part free when the rain chart is drawn there.
-void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas,
-                                bool leave_room_for_rain = false);
+// Events area (placeholder until the calendar is connected).
+void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas);
 
 // True when any hour today has a rain probability above 0%.
 bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather);
 
-// Hourly rain-probability chart in the lower part of the events panel.
+// Hourly rain-probability chart in the lower part of the weather area.
 // Hours before current_hour are drawn lighter; pass -1 when unknown.
 void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
                                    const zectrix_weather_data_t& weather,

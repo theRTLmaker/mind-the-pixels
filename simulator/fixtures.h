@@ -99,7 +99,7 @@ inline const zectrix_trains_data_t kOneTrain = Trains({
 inline const std::vector<Scenario>& Scenarios() {
     static const std::vector<Scenario> scenarios = {
         {"sunny", "Clear sky, trains on time", true,
-         Weather(0, 18.4f, 18.0f, 11, 21, 5, 52, 9), kOnTime, "10:42"},
+         Weather(0, 18.4f, 18.0f, 11, 21, 0, 52, 9), kOnTime, "10:42"},
         {"partly-cloudy", "Weather code 2, one late and one cancelled", true,
          Weather(2, 12.3f, 10.8f, 9, 14, 20, 71, 14), kMixed, "09:58"},
         {"overcast", "Weather code 3", true,
