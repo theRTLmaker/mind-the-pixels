@@ -39,8 +39,10 @@ void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas,
 bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather);
 
 // Hourly rain-probability chart in the lower part of the events panel.
+// Hours before current_hour are drawn lighter; pass -1 when unknown.
 void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
-                                   const zectrix_weather_data_t& weather);
+                                   const zectrix_weather_data_t& weather,
+                                   int current_hour = -1);
 
 // Clock in the top-right corner. Clears its own area; text such as "10:42".
 void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text);

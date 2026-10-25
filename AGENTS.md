@@ -78,7 +78,9 @@ panel contrast must be validated on the device.
 
 ## Known issues / next steps
 
-- Weather is fetched once when the dashboard opens; it does not refresh.
+- Weather is re-fetched every 15 minutes on the dashboard; a change redraws
+  the whole screen with a gray full refresh (~7 s), which also resets the
+  partial-refresh counter.
 - The dashboard opens with a 16-gray refresh (`RefreshFullGray`), then
   updates the clock and train card with 1bpp partials on top of it via
   `zectrix_epd_set_partial_base_1bpp`. Keep gray out of those partial

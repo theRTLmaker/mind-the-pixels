@@ -379,7 +379,8 @@ bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather) {
 }
 
 void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
-                                   const zectrix_weather_data_t& weather) {
+                                   const zectrix_weather_data_t& weather,
+                                   int current_hour) {
     // One bar per hour, 0-100% over kBarMax pixels, labelled every 6 h.
     constexpr int kLeft = 72;
     constexpr int kPitch = 13;
@@ -410,8 +411,16 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
             std::clamp(weather.hourly_rain_percent[hour], 0, 100);
         if (percent > 0) {
             const int height = std::max(2, percent * kBarMax / 100);
+            const bool past = current_hour >= 0 && hour < current_hour;
             canvas.FillRectGray(x, kBaseline - height, kBarWidth, height,
-                                percent >= 50 ? 3 : 7);
+                                past ? 12 : (percent >= 50 ? 3 : 7));
+        }
+        if (hour == current_hour) {
+            // "Now" marker: a small triangle on the baseline.
+            for (int row = 0; row < 4; ++row) {
+                canvas.FillRect(x + kBarWidth / 2 - row, kBaseline + 1 + row,
+                                row * 2 + 1, 1, true);
+            }
         }
         if (hour % 6 == 0) {
             char label[4];
@@ -439,7 +448,14 @@ void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
     const bool rain = ZectrixDashboardHasRain(weather);
     ZectrixDashboardDrawEvents(canvas, rain);
     if (rain) {
-        ZectrixDashboardDrawRainChart(canvas, *weather);
+        // The hour comes from the clock text ("HH:MM"), when it is set.
+        int hour = -1;
+        if (clock_text != nullptr && clock_text[0] >= '0' &&
+            clock_text[0] <= '9' && clock_text[1] >= '0' &&
+            clock_text[1] <= '9') {
+            hour = (clock_text[0] - '0') * 10 + (clock_text[1] - '0');
+        }
+        ZectrixDashboardDrawRainChart(canvas, *weather, hour);
     }
     ZectrixDashboardDrawClock(canvas, clock_text);
 }

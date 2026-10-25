@@ -359,12 +359,15 @@ private:
         return RunMountain();
     }
 
+    static constexpr int64_t kDashboardWeatherRefreshUs =
+        15LL * 60 * 1000 * 1000;
+
     ControlResult RunDashboard() {
         ZectrixCanvas& canvas = ui_.canvas();
 
         zectrix_weather_data_t weather = {};
-        const esp_err_t weather_err =
-            zectrix_dashboard_weather_fetch(&weather);
+        bool weather_ok = zectrix_dashboard_weather_fetch(&weather) == ESP_OK;
+        int64_t last_weather_fetch_us = esp_timer_get_time();
 
         // Start background train updates.
         ESP_ERROR_CHECK(zectrix_dashboard_trains_start());
@@ -373,9 +376,9 @@ private:
 
         // Layout and drawing live in zectrix_dashboard_view, shared with
         // the Mac simulator.
-        ZectrixDashboardDrawAll(
-            canvas, weather_err == ESP_OK ? &weather : nullptr,
-            displayed_trains, "--:--");
+        char clock_text[8] = "--:--";
+        ZectrixDashboardDrawAll(canvas, weather_ok ? &weather : nullptr,
+                                displayed_trains, clock_text);
 
         // 16-gray frame; the clock and train card then use partial
         // refreshes on top of it (experimental, see zectrix_epd.h).
@@ -387,6 +390,25 @@ private:
 
         while (true) {
             ZectrixButtonEvent event;
+
+            // Re-fetch the weather every 15 minutes. The weather panel and
+            // rain chart contain gray, which partial refreshes can't draw,
+            // so a change redraws everything with a gray full refresh. On
+            // failure the last good weather stays on screen.
+            if (esp_timer_get_time() - last_weather_fetch_us >=
+                kDashboardWeatherRefreshUs) {
+                last_weather_fetch_us = esp_timer_get_time();
+                zectrix_weather_data_t fresh = {};
+                if (zectrix_dashboard_weather_fetch(&fresh) == ESP_OK &&
+                    (!weather_ok ||
+                     std::memcmp(&fresh, &weather, sizeof(fresh)) != 0)) {
+                    weather = fresh;
+                    weather_ok = true;
+                    ZectrixDashboardDrawAll(canvas, &weather,
+                                            displayed_trains, clock_text);
+                    ESP_ERROR_CHECK(ui_.RefreshFullGray());
+                }
+            }
 
             zectrix_trains_data_t current_trains = {};
 
@@ -438,7 +460,6 @@ private:
 
             // Refresh only when the displayed minute changes.
             if (local_time.tm_min != last_displayed_minute) {
-                char clock_text[8];
                 std::snprintf(clock_text, sizeof(clock_text), "%02d:%02d",
                             local_time.tm_hour, local_time.tm_min);
 
