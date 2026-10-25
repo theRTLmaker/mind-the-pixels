@@ -220,8 +220,8 @@ void DrawWeatherIcon(ZectrixCanvas& canvas, int cx, int cy, int code) {
 }
 
 // Gray for labels and secondary text, and for hairline dividers.
-constexpr uint8_t kLabel = 6;
-constexpr uint8_t kRule = 10;
+constexpr uint8_t kLabel = 3;
+constexpr uint8_t kRule = 6;
 
 // TRMNL16 text in a gray level. Only for areas outside the partial-refresh
 // windows, which must stay pure black and white.
@@ -472,7 +472,7 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
             const int height = std::max(2, percent * kBarMax / 100);
             const bool past = current_hour >= 0 && hour < current_hour;
             canvas.FillRectGray(x, kBaseline - height, kBarWidth, height,
-                                past ? 12 : (percent >= 50 ? 3 : 7));
+                                past ? 10 : (percent >= 50 ? 3 : 7));
         }
         if (hour == current_hour) {
             // "Now" marker: a small triangle under the baseline.
