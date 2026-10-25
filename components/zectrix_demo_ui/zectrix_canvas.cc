@@ -5,8 +5,50 @@
 
 #include "zectrix_ascii_font_8x16.h"
 
+namespace {
+
+// 4x4 Bayer matrix for dithering gray into the 1bpp frame.
+constexpr uint8_t kBayer4[4][4] = {
+    {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+
+}  // namespace
+
 void ZectrixCanvas::Clear(bool white) {
     pixels_.fill(white ? 0xff : 0x00);
+    std::fill(gray_.begin(), gray_.end(), white ? 0xff : 0x00);
+}
+
+void ZectrixCanvas::SetGray(int x, int y, uint8_t level) {
+    const size_t index = static_cast<size_t>(y) * kWidth + x;
+    uint8_t& pair = gray_[index / 2];
+    if (index & 1U) {
+        pair = static_cast<uint8_t>((pair & 0xF0) | (level & 0x0F));
+    } else {
+        pair = static_cast<uint8_t>((pair & 0x0F) | (level << 4));
+    }
+}
+
+void ZectrixCanvas::GrayPixel(int x, int y, uint8_t level) {
+    if (x < 0 || x >= kWidth || y < 0 || y >= kHeight) {
+        return;
+    }
+    level = std::min<uint8_t>(level, 15);
+    const bool black = level * 17 < kBayer4[y & 3][x & 3] * 16 + 8;
+    Pixel(x, y, black);
+    SetGray(x, y, level);
+}
+
+void ZectrixCanvas::FillRectGray(int x, int y, int width, int height,
+                                 uint8_t level) {
+    const int left = std::max(0, x);
+    const int top = std::max(0, y);
+    const int right = std::min(kWidth, x + width);
+    const int bottom = std::min(kHeight, y + height);
+    for (int py = top; py < bottom; ++py) {
+        for (int px = left; px < right; ++px) {
+            GrayPixel(px, py, level);
+        }
+    }
 }
 
 void ZectrixCanvas::Pixel(int x, int y, bool black) {
@@ -20,6 +62,7 @@ void ZectrixCanvas::Pixel(int x, int y, bool black) {
     } else {
         byte |= mask;
     }
+    SetGray(x, y, black ? 0 : 15);
 }
 
 void ZectrixCanvas::FillRect(int x, int y, int width, int height,

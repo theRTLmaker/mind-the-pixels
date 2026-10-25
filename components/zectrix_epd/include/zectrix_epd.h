@@ -94,6 +94,21 @@ esp_err_t zectrix_epd_refresh_full_4bpp(zectrix_epd_handle_t handle,
                                         const uint8_t* framebuffer,
                                         size_t framebuffer_size);
 
+/**
+ * Experimental: re-enable partial refresh after a 16-gray frame.
+ *
+ * framebuffer is the 1bpp image (same format as full refresh) that later
+ * partial refreshes treat as the panel's current content. Only update
+ * windows whose pixels the 16-gray frame drew as pure black or white, since
+ * the transition waveform cannot start from an intermediate gray. The panel
+ * must be powered: the frame is also loaded into controller RAM (without a
+ * refresh), otherwise partials after a gray frame blank the whole panel.
+ * Verified on the NOTE4 on 2026-10-25.
+ */
+esp_err_t zectrix_epd_set_partial_base_1bpp(zectrix_epd_handle_t handle,
+                                            const uint8_t* framebuffer,
+                                            size_t framebuffer_size);
+
 #ifdef __cplusplus
 }
 #endif

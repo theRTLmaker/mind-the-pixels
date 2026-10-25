@@ -45,6 +45,13 @@ public:
 
     ZectrixCanvas& canvas() { return canvas_; }
     esp_err_t RefreshFull();
+    // 16-gray full refresh from the canvas's 4bpp frame. Later partial
+    // refreshes stay allowed, but only for pure black/white regions, and
+    // the periodic full refresh they trigger is a gray one too.
+    esp_err_t RefreshFullGray();
+    // Call when leaving a gray screen: the next partial refresh becomes a
+    // full black/white one, since other screens may cover gray areas.
+    void EndGrayMode();
     esp_err_t RefreshPartial(const zectrix_epd_rect_t& rect);
 
 private:
@@ -59,6 +66,7 @@ private:
     ZectrixCanvas canvas_;
     std::array<uint8_t, 50 * 300> partial_buffer_ = {};
     int partial_count_ = 0;
+    bool gray_base_ = false;
     int64_t last_update_us_ = 0;
 };
 

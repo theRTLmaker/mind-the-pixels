@@ -7,3 +7,7 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Mac simulator build output
+/simulator/build/
+/simulator/out/

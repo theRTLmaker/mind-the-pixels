@@ -2,7 +2,7 @@ idf_component_register(
     SRCS "zectrix_epd.cc"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "private_include"
-    REQUIRES driver esp_timer
+    REQUIRES esp_driver_gpio esp_driver_spi driver esp_timer
 )
 
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)

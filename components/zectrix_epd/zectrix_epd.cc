@@ -358,6 +358,13 @@ struct zectrix_epd_t {
     }
 
     esp_err_t WriteOtpFrame(const uint8_t* framebuffer) {
+        esp_err_t err = WriteOtpRam(framebuffer);
+        if (err == ESP_OK) err = TriggerOtpRefresh();
+        return err;
+    }
+
+    // Loads a 1bpp frame into controller RAM without refreshing the panel.
+    esp_err_t WriteOtpRam(const uint8_t* framebuffer) {
         esp_err_t err = SetTemperatureForOtp();
         if (err == ESP_OK) err = SendCommand(0x10);
         std::array<uint8_t, kNativeStride> line = {};
@@ -380,7 +387,6 @@ struct zectrix_epd_t {
             }
             err = SendBytes(line.data(), line.size());
         }
-        if (err == ESP_OK) err = TriggerOtpRefresh();
         return err;
     }
 
@@ -780,5 +786,30 @@ extern "C" esp_err_t zectrix_epd_refresh_full_4bpp(zectrix_epd_handle_t handle,
     const esp_err_t restore_err = handle->RestoreOtp();
     if (err == ESP_OK) err = restore_err;
     handle->shadow_valid = false;
+    return err;
+}
+
+extern "C" esp_err_t zectrix_epd_set_partial_base_1bpp(
+    zectrix_epd_handle_t handle, const uint8_t* framebuffer,
+    size_t framebuffer_size) {
+    if (handle == nullptr || framebuffer == nullptr ||
+        framebuffer_size != ZECTRIX_EPD_1BPP_FRAME_BYTES) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    MutexGuard guard(handle->mutex);
+    if (!guard.locked()) return ESP_FAIL;
+    if (!handle->powered || !handle->controller_ready) return ESP_ERR_INVALID_STATE;
+    // The 16-gray passes leave gray codes in controller RAM. Partial
+    // refreshes after them blanked the whole panel for a moment, so load the
+    // black/white frame into RAM (no refresh), matching the state after a
+    // full 1bpp refresh.
+    esp_err_t err = handle->PrepareOtpRefresh();
+    if (err == ESP_OK) err = handle->WriteOtpRam(framebuffer);
+    if (err == ESP_OK) {
+        std::memcpy(handle->shadow, framebuffer, framebuffer_size);
+        handle->shadow_valid = true;
+    } else {
+        handle->shadow_valid = false;
+    }
     return err;
 }

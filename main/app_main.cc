@@ -6,6 +6,10 @@
 #include <cstring>
 #include <iterator>
 
+#include <ctime>
+#include <cstdlib>
+#include "esp_sntp.h"
+
 #include "esp_flash.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
@@ -18,6 +22,10 @@
 #include "zectrix_demo_ui.h"
 #include "zectrix_epd.h"
 #include "zectrix_self_test.h"
+#include "zectrix_dashboard_wifi.h"
+#include "zectrix_dashboard_weather.h"
+#include "zectrix_dashboard_trains.h"
+#include "zectrix_dashboard_view.h"
 
 extern "C" {
 extern const uint8_t kLighthouse1bppStart[]
@@ -64,6 +72,20 @@ uint16_t ReadLe16(const uint8_t* data) {
            static_cast<uint16_t>(data[1] << 8);
 }
 
+static void StartDashboardClockSync() {
+    static bool started = false;
+
+    setenv("TZ", "GMT0BST,M3.5.0/1,M10.5.0/2", 1);
+    tzset();
+
+    if (!started) {
+        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_init();
+        started = true;
+    }
+}
+
 class DemoApp {
 public:
     DemoApp() : ui_(nullptr), tests_(&board_) {
@@ -86,6 +108,12 @@ public:
         ui_.SetEpd(epd_);
         ESP_ERROR_CHECK(ui_.ShowSplash());
         Wait(pdMS_TO_TICKS(1500), false);
+
+        const esp_err_t wifi_err = zectrix_dashboard_wifi_connect();
+        if (wifi_err != ESP_OK) {
+            ESP_LOGW(kTag, "Dashboard Wi-Fi unavailable: %s",
+                     esp_err_to_name(wifi_err));
+        }
 
         while (true) {
             const ControlResult result = RunHome();
@@ -158,8 +186,13 @@ private:
 
     ControlResult RunHome() {
         static constexpr const char* kItems[] = {
-            "AUTO SHOWCASE", "DISPLAY GALLERY", "HARDWARE TESTS",
-            "DEVICE INFO", "ABOUT & LICENSE"};
+            "DASHBOARD",
+            "AUTO SHOWCASE",
+            "DISPLAY GALLERY",
+            "HARDWARE TESTS",
+            "DEVICE INFO",
+            "ABOUT & LICENSE"
+        };
         size_t selected = 0;
         while (true) {
             const ControlResult menu = RunMenu(
@@ -175,21 +208,28 @@ private:
             if (menu == ControlResult::kContinue) {
                 selected = 0;
             }
-            // A timeout and selecting AUTO SHOWCASE intentionally share the
-            // same first action.
+            // A timeout intentionally starts the auto showcase.
+            if (menu == ControlResult::kContinue) {
+                selected = 1;
+            }
+
             if (selected == 0) {
-                const ControlResult result = RunAutoShowcase();
+                const ControlResult result = RunDashboard();
+                ui_.EndGrayMode();
                 if (result == ControlResult::kShutdown) return result;
             } else if (selected == 1) {
-                const ControlResult result = RunDisplayGallery();
+                const ControlResult result = RunAutoShowcase();
                 if (result == ControlResult::kShutdown) return result;
             } else if (selected == 2) {
-                const ControlResult result = RunHardwareTests();
+                const ControlResult result = RunDisplayGallery();
                 if (result == ControlResult::kShutdown) return result;
             } else if (selected == 3) {
-                const ControlResult result = RunDeviceInfo();
+                const ControlResult result = RunHardwareTests();
                 if (result == ControlResult::kShutdown) return result;
             } else if (selected == 4) {
+                const ControlResult result = RunDeviceInfo();
+                if (result == ControlResult::kShutdown) return result;
+            } else if (selected == 5) {
                 ESP_ERROR_CHECK(ui_.ShowAbout());
                 const ControlResult result = Wait(portMAX_DELAY, false);
                 if (result == ControlResult::kShutdown) return result;
@@ -317,6 +357,103 @@ private:
         if (scene == 0) return RunLighthouse();
         if (scene == 1) return RunFootprints();
         return RunMountain();
+    }
+
+    ControlResult RunDashboard() {
+        ZectrixCanvas& canvas = ui_.canvas();
+
+        zectrix_weather_data_t weather = {};
+        const esp_err_t weather_err =
+            zectrix_dashboard_weather_fetch(&weather);
+
+        // Start background train updates.
+        ESP_ERROR_CHECK(zectrix_dashboard_trains_start());
+
+        zectrix_trains_data_t displayed_trains = {};
+
+        // Layout and drawing live in zectrix_dashboard_view, shared with
+        // the Mac simulator.
+        ZectrixDashboardDrawAll(
+            canvas, weather_err == ESP_OK ? &weather : nullptr,
+            displayed_trains, "--:--");
+
+        // 16-gray frame; the clock and train card then use partial
+        // refreshes on top of it (experimental, see zectrix_epd.h).
+        ESP_ERROR_CHECK(ui_.RefreshFullGray());
+
+        StartDashboardClockSync();
+
+        int last_displayed_minute = -1;
+
+        while (true) {
+            ZectrixButtonEvent event;
+
+            zectrix_trains_data_t current_trains = {};
+
+            // Redraw on any change, including failures while still
+            // invalid, so the card can show "No train data".
+            zectrix_dashboard_trains_get(&current_trains);
+            if (std::memcmp(&current_trains, &displayed_trains,
+                            sizeof(current_trains)) != 0) {
+                displayed_trains = current_trains;
+                ZectrixDashboardDrawTrains(canvas, displayed_trains);
+
+                // Aligned partial-refresh region covering the train card.
+                const zectrix_epd_rect_t trains_rect = {
+                    kDashboardTrainsRefreshRect.x,
+                    kDashboardTrainsRefreshRect.y,
+                    kDashboardTrainsRefreshRect.width,
+                    kDashboardTrainsRefreshRect.height};
+                ESP_ERROR_CHECK(ui_.RefreshPartial(trains_rect));
+            }
+
+            // Check buttons once per second so the clock can update.
+            const bool got_event =
+                board_.WaitButton(&event, pdMS_TO_TICKS(1000));
+
+            if (got_event) {
+                if (event.button == ZectrixButton::kDown &&
+                    event.action == ZectrixButtonAction::kLongPress) {
+                    return ControlResult::kShutdown;
+                }
+
+                if (event.button == ZectrixButton::kOk &&
+                    event.action == ZectrixButtonAction::kLongPress) {
+                    return ControlResult::kBack;
+                }
+
+                if (event.action == ZectrixButtonAction::kClick) {
+                    return ControlResult::kBack;
+                }
+            }
+
+            // Wait until SNTP has supplied a plausible current time.
+            const time_t now = time(nullptr);
+            if (now < 1700000000) {
+                continue;
+            }
+
+            struct tm local_time = {};
+            localtime_r(&now, &local_time);
+
+            // Refresh only when the displayed minute changes.
+            if (local_time.tm_min != last_displayed_minute) {
+                char clock_text[8];
+                std::snprintf(clock_text, sizeof(clock_text), "%02d:%02d",
+                            local_time.tm_hour, local_time.tm_min);
+
+                ZectrixDashboardDrawClock(canvas, clock_text);
+
+                const zectrix_epd_rect_t clock_rect = {
+                    kDashboardClockRefreshRect.x,
+                    kDashboardClockRefreshRect.y,
+                    kDashboardClockRefreshRect.width,
+                    kDashboardClockRefreshRect.height};
+                ESP_ERROR_CHECK(ui_.RefreshPartial(clock_rect));
+
+                last_displayed_minute = local_time.tm_min;
+            }
+        }
     }
 
     ControlResult RunAutoShowcase() {

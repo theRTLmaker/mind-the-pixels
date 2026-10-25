@@ -16,4 +16,12 @@ config ZECTRIX_DEMO_NFC_URL
     string "Temporary NFC demonstration URL"
     default "https://www.zectrix.com"
 
+config ZECTRIX_DASHBOARD_WIFI_SSID
+    string "Dashboard Wi-Fi SSID"
+    default ""
+
+config ZECTRIX_DASHBOARD_WIFI_PASSWORD
+    string "Dashboard Wi-Fi password"
+    default ""
+
 endmenu

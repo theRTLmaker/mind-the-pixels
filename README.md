@@ -1,146 +1,144 @@
-# ZECTRIX NOTE4 E-Paper Reference Demo
+# Mind the Pixels
 
-English | [中文](README_zh.md)
+*A little less screen time. A little more London.*
 
-A standalone, open-source ESP-IDF reference project for the ZECTRIX NOTE4
-4.2-inch black-and-white e-paper hardware. It demonstrates the display, audio,
-Wi-Fi, RTC, charging, LED, buttons, NFC and battery-monitoring capabilities
-through an English on-device UI.
+A quiet London dashboard for the ZECTRIX NOTE4 e-paper display: weather,
+the next trains to St Pancras, and (later) what's coming up in the calendar.
+It runs on the NOTE4's ESP32-S3 and draws on its 400 × 300 SSD2683 panel,
+which supports full-screen black/white and 16-level grayscale refreshes.
 
-This project is self-contained under this directory. It does not link to the
-commercial NOTE4 firmware or require LVGL. It is a hardware demonstration and
-driver reference, not the complete NOTE4 consumer firmware or cloud service.
+Mind the Pixels is built on the
+[ZECTRIX NOTE4 E-Paper Reference Demo](https://github.com/itopinion/zectrix-note4-epd-demo)
+by Zectrix Lab, which provides the board support, display driver, bitmap font
+and hardware self-tests. See [Credits and licence](#credits-and-licence).
 
 > [!IMPORTANT]
-> This project targets the black-and-white ZECTRIX NOTE4 hardware. It is not
-> compatible with NOTE4C. Flashing this demo replaces the firmware currently
-> installed on the connected device, so confirm the model and serial port
-> before running any flash command.
+> This targets the black-and-white ZECTRIX NOTE4, not the NOTE4C. Flashing
+> replaces whatever firmware is on the device. Confirm the model and serial
+> port before every flash, and keep a backup of the original flash outside
+> this repository.
 
-![Footprint animation preview](main/assets/snow_path_footprints_preview.png)
+## What it shows
 
-## Highlights
+| Region | Content | Source |
+| --- | --- | --- |
+| Top left | Temperature, low/high, rain chance, feels-like, humidity, wind, condition icon | [Open-Meteo](https://open-meteo.com/) (London, HTTPS) |
+| Top right | Clock (UK time via SNTP) and next three departures Stratford → St Pancras, with revised times, delays and cancellations | [Huxley2](https://huxley2.azurewebsites.net/) wrapper over National Rail Darwin |
+| Bottom | "Coming up" events | Placeholder; calendar integration is planned |
 
-- 400 x 300 SSD2683 e-paper display
-- Full-screen 1bpp refresh, partial 1bpp refresh and full-screen 4bpp/16-gray
-  refresh
-- Display gallery with a lighthouse print, six-step footprint animation and
-  high-contrast grayscale landscape
-- Wi-Fi RF scan, acoustic speaker/microphone loopback, PCF8563 RTC, charging,
-  LED, three-button and NFC self-tests
-- Device information page for flash, PSRAM, MAC address, peripherals and power
-- Embedded proportional-width TRMNL16 ASCII bitmap font; no runtime font or
-  filesystem dependency
-- Long-press DOWN for 3 seconds to clear the panel and shut down
-- MIT licensed by ZECTRIX Lab
+The weather is fetched when the dashboard opens; trains refresh in the
+background every 60 seconds and keep the last good data if a refresh fails.
+The clock and train card update with partial refreshes.
 
-## Quick start
+The upstream demo's menu is still available: Dashboard, Auto Showcase,
+Display Gallery, Hardware Tests, Device Info and About & License.
 
-Requirements: ESP-IDF 5.4 or later and a ZECTRIX NOTE4 4.2-inch ESP32-S3
-black-and-white e-paper board.
+## Hardware
+
+- ZECTRIX NOTE4 DevKit (ESP32-S3, 16 MB flash, 8 MB octal PSRAM)
+- 4.2-inch 400 × 300 SSD2683 e-paper, 1bpp full/partial and 4bpp (16-gray)
+  full refresh
+- Three buttons, RTC, NFC, speaker/microphone (used by the self-tests)
+
+## Firmware setup
+
+Requires ESP-IDF **5.5.0**. ESP-IDF 6.1 fails static assertions in the
+display waveform tables, so stay on 5.5.x unless you have tested otherwise.
 
 ```bash
-# Run these commands from the repository root.
-idf.py set-target esp32s3
+conda deactivate 2>/dev/null || true
+source ~/.espressif/tools/activate_idf_v5.5.sh
+idf.py --version
+```
+
+### Wi-Fi
+
+Set the dashboard's Wi-Fi network in `idf.py menuconfig` under
+**Zectrix hardware showcase → Dashboard Wi-Fi SSID / password**. These are
+stored in your local `sdkconfig`, which is gitignored. Never commit
+`sdkconfig`, `sdkconfig.old` or any file containing the password.
+
+### Build and flash
+
+```bash
+idf.py set-target esp32s3   # first time only
 idf.py build
-idf.py -p /dev/ttyACM0 flash monitor
+idf.py -p /dev/cu.usbmodem1101 flash monitor
 ```
 
-Replace `/dev/ttyACM0` with the board's serial port. Exit the monitor with
-`Ctrl+]`. The first configure/build downloads the official
-`espressif/esp_codec_dev` component.
+Replace the port with your device's (`ls /dev/cu.usbmodem*`). Exit the
+monitor with `Ctrl+]`. The main task stack is raised to 12 KB in
+`sdkconfig.defaults` because HTTPS requests overflowed the default.
 
-See [docs/QUICK_START.md](docs/QUICK_START.md) for setup and troubleshooting.
+## Mac simulator
 
-## Controls
+Iterate on the layout without flashing. The simulator compiles the
+firmware's own drawing code (`ZectrixCanvas`, the TRMNL16 bitmap font and
+`components/zectrix_dashboard_view`) for macOS and renders sample scenarios
+to PNG.
 
-| Input | Action |
-| --- | --- |
-| UP press | Previous item |
-| DOWN press | Next item |
-| OK click | Select or confirm |
-| OK hold (1.5 s) | Return or cancel |
-| DOWN hold (3 s) | Clear display, power down peripherals and shut down |
-
-The home screen starts Auto Showcase after 15 seconds of inactivity. On
-battery power, shutdown releases the hardware power latch. While powered over
-USB, the board enters deep sleep after clearing the display.
-
-## UI map
-
-```text
-Splash
-  -> Home
-     |-- Auto Showcase
-     |    `-- 1bpp Full -> 1bpp Partial -> 4bpp Full
-     |-- Display Gallery
-     |    |-- Lighthouse / Full 1bpp
-     |    |-- Footprints / Partial 1bpp
-     |    |-- Mountain / Full 4bpp
-     |    `-- Run All Scenes
-     |-- Hardware Tests
-     |    |-- Run All Tests
-     |    `-- Select Individual
-     |         `-- Wi-Fi RF / Audio / RTC / Power / LED / Buttons / NFC
-     |-- Device Info
-     `-- About & License
+```bash
+simulator/run.sh                 # build, render all scenarios, open the preview
+simulator/run.sh partly-cloudy   # render one scenario
+simulator/build/mtp_sim --list   # list scenarios
 ```
 
-The 4bpp scene always performs a white 1bpp full refresh first to reduce
-ghosting. UI partial refreshes are periodically replaced by a full refresh to
-limit accumulated artifacts.
+Output goes to `simulator/out/`: a 1:1 PNG per scenario, a 3× enlargement,
+and `index.html` showing them side by side. Scenarios live in
+`simulator/fixtures.h` (sunny, partly cloudy, fog, rain, snow, storm, train
+delays and cancellations, late night, offline). Needs Xcode command-line
+tools and CMake (`brew install cmake`); no ESP-IDF required.
 
-## Configuration
-
-Open `idf.py menuconfig`, then select **Zectrix hardware showcase**:
-
-- `Optional Wi-Fi SSID for RF qualification`: empty means generic scan mode;
-  a configured SSID requires three consecutive qualifying observations.
-- `RF qualification threshold (dBm)`: default `-70`.
-- `Temporary NFC demonstration URL`: default `https://www.zectrix.com`.
+The simulator shows exact pixels, not the panel: refresh flashing, ghosting,
+contrast and paper tone still need checking on the device.
 
 ## Repository layout
 
 ```text
-components/zectrix_epd/       Public SSD2683 display driver
-components/zectrix_board/     Board pins and peripheral adapters
-components/zectrix_demo_ui/   Canvas, bitmap font and English UI
-components/zectrix_self_test/ Hardware test implementations
-main/assets/                  Embedded display assets
-tools/                        Asset and font conversion utilities
-docs/                         Integration and validation guides
+main/app_main.cc                    App flow, menus, dashboard loop
+components/zectrix_dashboard_view/  Dashboard layout and drawing (shared with the simulator)
+components/zectrix_dashboard_wifi/  Wi-Fi station connection
+components/zectrix_dashboard_weather/ Open-Meteo client
+components/zectrix_dashboard_trains/  Departure board client and background refresh
+components/zectrix_demo_ui/         Canvas, bitmap font, menu UI        (upstream)
+components/zectrix_epd/             SSD2683 display driver              (upstream)
+components/zectrix_board/           Board pins and peripherals          (upstream)
+components/zectrix_self_test/       Hardware self-tests                 (upstream)
+simulator/                          Mac simulator
+docs/                               Upstream hardware and API guides
+tools/                              Asset and font conversion scripts   (upstream)
 ```
 
-The public EPD interface is documented in
-[docs/EPD_API.md](docs/EPD_API.md). Hardware pins and tests are documented in
-[docs/HARDWARE.md](docs/HARDWARE.md) and
-[docs/TEST_CRITERIA.md](docs/TEST_CRITERIA.md).
+The display driver API is documented in [docs/EPD_API.md](docs/EPD_API.md)
+and the hardware in [docs/HARDWARE.md](docs/HARDWARE.md).
 
-## Image asset formats
+## Roadmap
 
-- 1bpp: 400 x 300, row-major, MSB first, `0` black and `1` white; 15,000 bytes.
-- 4bpp: 400 x 300, two pixels per byte, left pixel in the high nibble,
-  `0` black and `15` white; 60,000 bytes.
+- Partly-cloudy and other weather icons with grayscale shading
+- Clearer delay and cancellation indicators, last-updated time for trains
+- Grayscale dashboard rendering (the canvas is 1bpp today)
+- Calendar and events
 
-Regenerate assets with:
+## Credits and licence
 
-```bash
-python tools/prepare_1bpp.py input.png output.png output.bin
-python tools/prepare_4bpp.py input.png output.png output.bin
-python tools/generate_ascii_font.py --help
-```
+Mind the Pixels is a modified version of the ZECTRIX NOTE4 E-Paper
+Reference Demo, Copyright (c) 2026 Zectrix Lab. Upstream code and the
+changes below (Copyright (c) 2026 Francisco Mendes) are released under the
+[MIT License](LICENSE); upstream notices are kept unchanged.
+The original README is preserved at
+[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md) ([中文](README_zh.md)).
 
-The footprint animation generator is documented in
-`tools/prepare_footprint_animation.py --help`.
+Changes from upstream: the dashboard, Wi-Fi, weather and train components,
+the shared dashboard view, the Mac simulator, and related edits to
+`main/app_main.cc` and the build configuration.
 
-## License
+Third-party components keep their own licences; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). In particular, the bitmap
+font is derived from TRMNL16 Regular under the SIL Open Font License 1.1
+([licenses/TRMNL_FONT_LICENSE.txt](licenses/TRMNL_FONT_LICENSE.txt)).
 
-Copyright (c) 2026 Zectrix Lab. Released under the [MIT License](LICENSE).
-Third-party notices are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Weather data by [Open-Meteo](https://open-meteo.com/) (CC BY 4.0). Train
+data from National Rail Darwin via Huxley2.
 
-## Official links
-
-- [ZECTRIX NOTE4 product page](https://www.zectrix.com/en/note4.html)
-- [ZECTRIX Developer Wiki](https://wiki.zectrix.com/)
+This is an independent hobby project, not affiliated with ZECTRIX,
+Transport for London or National Rail.

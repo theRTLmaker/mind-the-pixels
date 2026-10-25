@@ -7,6 +7,10 @@ idf_component_register(SRCS "app_main.cc"
                        esp_timer
                        heap
                        spi_flash
+                       zectrix_dashboard_wifi
+                       zectrix_dashboard_weather
+                       zectrix_dashboard_trains
+                       zectrix_dashboard_view
                        EMBED_FILES
                        "assets/lighthouse_400x300_1bpp.bin"
                        "assets/snow_path_400x300_1bpp.bin"
