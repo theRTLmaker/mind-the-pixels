@@ -5,6 +5,7 @@
 #include <ctime>
 
 #include "cJSON.h"
+#include "sdkconfig.h"
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -14,7 +15,12 @@
 
 namespace {
 constexpr char kTag[] = "dashboard_trains";
-constexpr char kUrl[] =
+// Official Rail Data Marketplace feed when a key is configured; the public
+// Huxley proxy otherwise, and as a fallback. Both return the LDBWS JSON
+// shape (trainServices, std, etd, isCancelled, destination[].crs).
+constexpr char kRdmUrl[] = CONFIG_ZECTRIX_TRAINS_RDM_URL;
+constexpr char kRdmApiKey[] = CONFIG_ZECTRIX_TRAINS_RDM_API_KEY;
+constexpr char kHuxleyUrl[] =
     "https://huxley2.azurewebsites.net/departures/SFA/to/STP/3";
 constexpr size_t kResponseCapacity = 16384;
 constexpr TickType_t kRefreshInterval = pdMS_TO_TICKS(60000);
@@ -72,7 +78,8 @@ bool CopyTime(const cJSON *value, char out[6]) {
     return true;
 }
 
-bool FetchTrains(zectrix_trains_data_t *result) {
+bool FetchTrainsFrom(const char *url, const char *api_key,
+                     zectrix_trains_data_t *result) {
     char *body = static_cast<char *>(malloc(kResponseCapacity));
     if (body == nullptr) {
         ESP_LOGE(kTag, "Out of memory for response");
@@ -83,7 +90,7 @@ bool FetchTrains(zectrix_trains_data_t *result) {
     ResponseBuffer response = {body, 0, kResponseCapacity};
 
     esp_http_client_config_t config = {};
-    config.url = kUrl;
+    config.url = url;
     config.method = HTTP_METHOD_GET;
     config.timeout_ms = 10000;
     config.event_handler = HttpEventHandler;
@@ -94,6 +101,10 @@ bool FetchTrains(zectrix_trains_data_t *result) {
     if (client == nullptr) {
         free(body);
         return false;
+    }
+
+    if (api_key != nullptr && api_key[0] != '\0') {
+        esp_http_client_set_header(client, "x-apikey", api_key);
     }
 
     const esp_err_t err = esp_http_client_perform(client);
@@ -187,6 +198,16 @@ bool FetchTrains(zectrix_trains_data_t *result) {
     *result = parsed;
     ESP_LOGI(kTag, "Loaded %d departures", parsed.count);
     return true;
+}
+
+bool FetchTrains(zectrix_trains_data_t *result) {
+    if (kRdmApiKey[0] != '\0') {
+        if (FetchTrainsFrom(kRdmUrl, kRdmApiKey, result)) {
+            return true;
+        }
+        ESP_LOGW(kTag, "Rail Data Marketplace failed; trying Huxley");
+    }
+    return FetchTrainsFrom(kHuxleyUrl, nullptr, result);
 }
 
 void TrainRefreshTask(void *) {

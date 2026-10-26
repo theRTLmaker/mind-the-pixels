@@ -51,9 +51,12 @@ Intended public repository name: `mind-the-pixels`.
   MSB first) with pixel, rect, Bresenham line and TRMNL16 bitmap text
   (proportional 16 px font, ASCII only, integer scaling).
 - `components/zectrix_dashboard_{wifi,weather,trains}/`: data sources.
-  Weather is Open-Meteo for 51.5072, -0.1276, Europe/London. Trains are
-  `https://huxley2.azurewebsites.net/departures/SFA/to/STP/3`, refreshed every
-  60 s, cached on failure.
+  Weather is Open-Meteo for 51.5072, -0.1276, Europe/London. Trains come
+  from the Rail Data Marketplace Live Departure Board when
+  `CONFIG_ZECTRIX_TRAINS_RDM_API_KEY` is set (menuconfig, gitignored
+  `sdkconfig`; never print or commit it), falling back to
+  `https://huxley2.azurewebsites.net/departures/SFA/to/STP/3`. Refreshed
+  every 60 s, cached on failure.
 - Partial refresh regions are byte-aligned and exported from the view header
   (`kDashboardTrainsRefreshRect`, `kDashboardClockRefreshRect`). If you move
   the clock or train card, update them.
