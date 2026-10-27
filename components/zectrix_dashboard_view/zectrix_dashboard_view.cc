@@ -273,8 +273,32 @@ int HourFromClock(const char* clock_text) {
 }
 
 // Train status, right-aligned to the card's inner edge.
-void DrawStatus(ZectrixCanvas& canvas, int y, const char* text) {
-    canvas.Text(384 - canvas.TextWidth(text), y, text);
+void DrawStatus(ZectrixCanvas& canvas, int y, const char* text,
+                int right = 384) {
+    canvas.Text(right - canvas.TextWidth(text), y, text);
+}
+
+// Right edge of train-row text when the occupancy icon follows it.
+constexpr int kTrainTextRight = 368;
+
+// Typical busyness as three rising bars, filled up to the level: quiet
+// (up to 30%), busy (up to 70%), very busy. Black and white only, like the
+// rest of the train card.
+void DrawLoading(ZectrixCanvas& canvas, int y, int percent) {
+    if (percent < 0) {
+        return;
+    }
+    const int level = percent <= 30 ? 1 : percent <= 70 ? 2 : 3;
+    for (int bar = 0; bar < 3; ++bar) {
+        const int height = 6 + bar * 3;
+        const int x = 374 + bar * 6;
+        const int top = y + 14 - height;
+        if (bar < level) {
+            canvas.FillRect(x, top, 4, height, true);
+        } else {
+            canvas.Rect(x, top, 4, height, true);
+        }
+    }
 }
 
 }  // namespace
@@ -385,9 +409,13 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
         if (train.cancelled) {
             canvas.Text(256, y, scheduled);
             DrawStatus(canvas, y, "Cancelled");
-        } else if (std::strcmp(train.expected, "-----") == 0) {
+            continue;
+        }
+
+        DrawLoading(canvas, y, train.loading_percent);
+        if (std::strcmp(train.expected, "-----") == 0) {
             canvas.Text(256, y, scheduled);
-            DrawStatus(canvas, y, "Delayed");
+            DrawStatus(canvas, y, "Delayed", kTrainTextRight);
         } else if (std::strcmp(train.scheduled, train.expected) == 0) {
             canvas.Text(256, y, scheduled);
         } else {
@@ -401,8 +429,8 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
             // into a "4" ("10h11" read as "10h44").
             canvas.Text(256, y, scheduled);
             canvas.Line(255, y + 13, 257 + canvas.TextWidth(scheduled), y + 2);
-            canvas.Text(304, y, "->");
-            canvas.Text(328, y, expected);
+            canvas.Text(302, y, "->");
+            canvas.Text(325, y, expected);
         }
     }
 }

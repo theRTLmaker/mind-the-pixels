@@ -51,13 +51,15 @@ inline zectrix_weather_data_t WithHourlyRain(zectrix_weather_data_t w,
 }
 
 inline zectrix_train_t Train(const char* scheduled, const char* expected,
-                             bool cancelled = false) {
+                             bool cancelled = false,
+                             int loading_percent = -1) {
     zectrix_train_t t = {};
     for (int i = 0; i < 5; ++i) {
         t.scheduled[i] = scheduled[i];
         t.expected[i] = expected[i];
     }
     t.cancelled = cancelled;
+    t.loading_percent = loading_percent;
     return t;
 }
 
@@ -79,11 +81,11 @@ inline zectrix_trains_data_t Trains(std::vector<zectrix_train_t> list,
 }
 
 inline const zectrix_trains_data_t kOnTime = Trains({
-    Train("10:01", "10:01"), Train("10:11", "10:11"),
-    Train("10:21", "10:21")});
+    Train("10:01", "10:01", false, 12), Train("10:11", "10:11", false, 48),
+    Train("10:21", "10:21", false, 91)});
 inline const zectrix_trains_data_t kMixed = Trains({
-    Train("10:01", "10:03"), Train("10:11", "-----"),
-    Train("10:21", "10:21", true)});
+    Train("10:01", "10:03", false, 85), Train("10:11", "-----", false, 40),
+    Train("10:21", "10:21", true, 20)});
 inline const zectrix_trains_data_t kLoading = {};
 inline const zectrix_trains_data_t kUnavailable = [] {
     zectrix_trains_data_t data = {};
@@ -94,7 +96,7 @@ inline const zectrix_trains_data_t kStale = Trains({
     Train("10:01", "10:01"), Train("10:11", "10:14"),
     Train("10:21", "10:21")}, "09:51", 7);
 inline const zectrix_trains_data_t kOneTrain = Trains({
-    Train("23:41", "23:41")});
+    Train("23:41", "23:41", false, 7)});
 
 inline const std::vector<Scenario>& Scenarios() {
     static const std::vector<Scenario> scenarios = {

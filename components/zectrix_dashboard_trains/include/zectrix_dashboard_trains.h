@@ -13,6 +13,7 @@ typedef struct {
     char scheduled[6];
     char expected[6];
     bool cancelled;
+    int loading_percent;  // typical busyness 0-100, -1 when unknown
 } zectrix_train_t;
 
 typedef struct {

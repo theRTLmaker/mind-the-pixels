@@ -188,6 +188,20 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
         const cJSON *cancelled = GetField(service, "isCancelled");
         train.cancelled = cJSON_IsTrue(cancelled);
 
+        // Staff version only: formation.serviceLoading.loadingPercentage.
+        const cJSON *loading = GetField(
+            GetField(GetField(GetField(service, "formation"),
+                              "serviceLoading"),
+                     "loadingPercentage"),
+            "Value");
+        train.loading_percent = -1;
+        if (cJSON_IsNumber(loading)) {
+            train.loading_percent =
+                loading->valueint < 0     ? 0
+                : loading->valueint > 100 ? 100
+                                          : loading->valueint;
+        }
+
         const cJSON *expected = GetField(service, "etd");
         ESP_LOGI(kTag, "Train %s: etd='%s', cancelled=%s",
                  train.scheduled,
