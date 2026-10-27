@@ -1,7 +1,7 @@
 # Publishing checklist
 
 Audit of this worktree before publishing it as `mind-the-pixels`
-(2026-10-25). Ticked items were checked; unticked items need a decision.
+(2026-10-25, updated 2026-10-27). Ticked items were checked; unticked items need a decision.
 
 ## Licences
 
@@ -19,8 +19,8 @@ Audit of this worktree before publishing it as `mind-the-pixels`
 - [x] README credits upstream and lists what changed.
 - [x] Own additions are MIT too: `LICENSE` has a second copyright line,
       `Copyright (c) 2026 Francisco Mendes`, below Zectrix Lab's.
-- [ ] Optional: add Open-Meteo (CC BY 4.0, attribution) and Huxley2/Darwin
-      data notes to `THIRD_PARTY_NOTICES.md` (already credited in README).
+- [x] Open-Meteo (CC BY 4.0) and Darwin (Rail Data Marketplace / Huxley2)
+      data notes added to `THIRD_PARTY_NOTICES.md` (2026-10-27).
 
 ## Secrets and local files
 
@@ -46,5 +46,7 @@ Audit of this worktree before publishing it as `mind-the-pixels`
 - [ ] `git remote` still points at `itopinion/zectrix-note4-epd-demo`.
       When creating `mind-the-pixels`, rename that remote to `upstream` and
       add your own as `origin`, keeping the upstream history.
-- [ ] Optional: rename the ESP-IDF project in `CMakeLists.txt` from
-      `zectrix_epd_demo` (changes the binary name in `build/`).
+- [x] ESP-IDF project renamed to `mind_the_pixels` (binary
+      `build/mind_the_pixels.bin`, 2026-10-27).
+- [x] Dashboard Wi-Fi settings moved to the Wi-Fi component's own Kconfig
+      (same symbol names, so existing `sdkconfig` values carry over).

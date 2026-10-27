@@ -54,7 +54,8 @@ Intended public repository name: `mind-the-pixels`.
   Weather is Open-Meteo for 51.5072, -0.1276, Europe/London. Trains come
   from the Rail Data Marketplace Live Departure Board (Staff Version,
   `GetDepBoardWithDetails/SFA/<yyyymmddThhmmss>`, ISO times, departed
-  trains skipped) when `CONFIG_ZECTRIX_TRAINS_RDM_API_KEY` is set
+  trains skipped, typical busyness from
+  `formation.serviceLoading`) when `CONFIG_ZECTRIX_TRAINS_RDM_API_KEY` is set
   (menuconfig, gitignored `sdkconfig`; never print or commit it), falling
   back to
   `https://huxley2.azurewebsites.net/departures/SFA/to/STP/3`. Refreshed
@@ -91,6 +92,3 @@ panel contrast must be validated on the device.
   `zectrix_epd_set_partial_base_1bpp`. Keep gray out of those partial
   windows. The canvas keeps both frames; the simulator writes `name.png`
   (gray) and `name-mono.png` (1bpp, gray dithered).
-- Dashboard Wi-Fi settings live in `components/zectrix_self_test/Kconfig`;
-  they would be clearer in the Wi-Fi component's own Kconfig.
-- The ESP-IDF project is still named `zectrix_epd_demo` (binary name).

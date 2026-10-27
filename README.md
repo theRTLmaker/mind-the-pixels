@@ -23,12 +23,14 @@ and hardware self-tests. See [Credits and licence](#credits-and-licence).
 | Region | Content | Source |
 | --- | --- | --- |
 | Top left | Temperature, low/high, rain chance, feels-like, humidity, wind, condition icon | [Open-Meteo](https://open-meteo.com/) (London, HTTPS) |
-| Top right | Clock (UK time via SNTP) and next three departures Stratford → St Pancras, with revised times, delays and cancellations | [Huxley2](https://huxley2.azurewebsites.net/) wrapper over National Rail Darwin |
+| Top right | Clock (UK time via SNTP) and next three departures Stratford → St Pancras, with revised times, delays, cancellations and typical busyness | [Rail Data Marketplace](https://raildata.org.uk/) Live Departure Board (Staff Version), falling back to [Huxley2](https://huxley2.azurewebsites.net/); both National Rail Darwin |
 | Bottom | "Coming up" events | Placeholder; calendar integration is planned |
 
-The weather is fetched when the dashboard opens; trains refresh in the
-background every 60 seconds and keep the last good data if a refresh fails.
-The clock and train card update with partial refreshes.
+The weather is fetched when the dashboard opens and every 15 minutes after
+that; trains refresh in the background every 60 seconds and keep the last
+good data if a refresh fails. The dashboard is drawn with a 16-gray full
+refresh; the clock and train card update with black-and-white partial
+refreshes.
 
 The upstream demo's menu is still available: Dashboard, Auto Showcase,
 Display Gallery, Hardware Tests, Device Info and About & License.
@@ -54,9 +56,20 @@ idf.py --version
 ### Wi-Fi
 
 Set the dashboard's Wi-Fi network in `idf.py menuconfig` under
-**Zectrix hardware showcase → Dashboard Wi-Fi SSID / password**. These are
-stored in your local `sdkconfig`, which is gitignored. Never commit
-`sdkconfig`, `sdkconfig.old` or any file containing the password.
+**Component config → Dashboard Wi-Fi**. These are stored in your local
+`sdkconfig`, which is gitignored. Never commit `sdkconfig`, `sdkconfig.old`
+or any file containing the password.
+
+### Trains
+
+Without configuration the train card uses the public Huxley2 server. For the
+official feed, register at [raildata.org.uk](https://raildata.org.uk/),
+subscribe to **Live Departure Board – Staff Version**, and enter its consumer
+key in `idf.py menuconfig` under **Component config → Dashboard trains**. The
+key is stored only in your gitignored `sdkconfig`. The firmware requests
+`GetDepBoardWithDetails/SFA/<current UK time>` filtered to St Pancras, skips
+trains that have already left, and shows the feed's typical busyness as
+one to three bars. If that request fails it falls back to Huxley2.
 
 ### Build and flash
 
@@ -114,10 +127,8 @@ and the hardware in [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ## Roadmap
 
-- Partly-cloudy and other weather icons with grayscale shading
-- Clearer delay and cancellation indicators, last-updated time for trains
-- Grayscale dashboard rendering (the canvas is 1bpp today)
-- Calendar and events
+- Calendar and events in the bottom panel
+- Overnight sleep and slower refreshes off-peak to save battery
 
 ## Credits and licence
 
@@ -138,7 +149,7 @@ font is derived from TRMNL16 Regular under the SIL Open Font License 1.1
 ([licenses/TRMNL_FONT_LICENSE.txt](licenses/TRMNL_FONT_LICENSE.txt)).
 
 Weather data by [Open-Meteo](https://open-meteo.com/) (CC BY 4.0). Train
-data from National Rail Darwin via Huxley2.
+data from National Rail Darwin via the Rail Data Marketplace or Huxley2.
 
 This is an independent hobby project, not affiliated with ZECTRIX,
 Transport for London or National Rail.

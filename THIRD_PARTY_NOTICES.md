@@ -27,3 +27,15 @@ component in `managed_components/espressif__esp_codec_dev/LICENSE`.
 The lighthouse, snowy-path and mountain images in `main/assets` were created
 for the Zectrix hardware demonstration and are distributed with this project
 under the project MIT License by Zectrix Lab.
+
+## Data sources
+
+These services are queried at run time; none of their data is stored in or
+distributed with this repository.
+
+- Weather: [Open-Meteo](https://open-meteo.com/), licensed under
+  CC BY 4.0, which requires attribution.
+- Trains: National Rail Darwin, through the
+  [Rail Data Marketplace](https://raildata.org.uk/) Live Departure Board –
+  Staff Version (subject to that product's terms and your own API key) or
+  the public [Huxley2](https://github.com/jpsingleton/Huxley2) proxy.

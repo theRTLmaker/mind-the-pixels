@@ -1,0 +1,15 @@
+menu "Dashboard Wi-Fi"
+
+config ZECTRIX_DASHBOARD_WIFI_SSID
+    string "Dashboard Wi-Fi SSID"
+    default ""
+    help
+        Network the dashboard joins. Lives in the gitignored sdkconfig.
+
+config ZECTRIX_DASHBOARD_WIFI_PASSWORD
+    string "Dashboard Wi-Fi password"
+    default ""
+    help
+        Lives in the gitignored sdkconfig; never commit it.
+
+endmenu
