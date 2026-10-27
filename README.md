@@ -24,10 +24,10 @@ and hardware self-tests. See [Credits and licence](#credits-and-licence).
 | --- | --- | --- |
 | Top left | Temperature, low/high, rain chance, feels-like, humidity, wind, condition icon | [Open-Meteo](https://open-meteo.com/) (London, HTTPS) |
 | Top right | Clock (UK time via SNTP) and next three departures Stratford → St Pancras, with revised times, delays, cancellations and typical busyness | [Rail Data Marketplace](https://raildata.org.uk/) Live Departure Board (Staff Version), falling back to [Huxley2](https://huxley2.azurewebsites.net/); both National Rail Darwin |
-| Bottom | "Coming up" events | Placeholder; calendar integration is planned |
+| Bottom | "Coming up": four curated London picks (exhibitions, jazz, classical, theatre deals, markets) with FREE/DEAL/BOOK tags | An `events.json` you publish (e.g. a secret gist), see [Events](#events) |
 
-The weather is fetched when the dashboard opens and every 15 minutes after
-that; trains refresh in the background every 60 seconds and keep the last
+The weather and events are fetched when the dashboard opens and every 15
+minutes after that; trains refresh in the background every 60 seconds and keep the last
 good data if a refresh fails. The dashboard is drawn with a 16-gray full
 refresh; the clock and train card update with black-and-white partial
 refreshes.
@@ -83,6 +83,27 @@ Replace the port with your device's (`ls /dev/cu.usbmodem*`). Exit the
 monitor with `Ctrl+]`. The main task stack is raised to 12 KB in
 `sdkconfig.defaults` because HTTPS requests overflowed the default.
 
+### Events
+
+The "Coming up" panel draws the `screen` lines of a small JSON file fetched
+from `CONFIG_ZECTRIX_EVENTS_URL` (**Component config → Dashboard events**,
+stored in the gitignored `sdkconfig`). How the file is produced is up to
+you; the author's is written each morning by a scheduled Claude task that
+searches London listings against a private taste profile and updates a
+secret gist. Minimal format:
+
+```json
+{
+  "screen": [
+    {"when": "Fri 30", "text": "Free jazz, Oxford House E2", "tag": "FREE"},
+    {"when": "13-22 Nov", "text": "London Jazz Festival, from £5", "tag": "BOOK"}
+  ]
+}
+```
+
+Up to four lines; `tag` is empty or a short word drawn inverted on the
+right. Text is ASCII plus "£"; anything too long is cut with "...".
+
 ## Mac simulator
 
 Iterate on the layout without flashing. The simulator compiles the
@@ -113,6 +134,7 @@ components/zectrix_dashboard_view/  Dashboard layout and drawing (shared with th
 components/zectrix_dashboard_wifi/  Wi-Fi station connection
 components/zectrix_dashboard_weather/ Open-Meteo client
 components/zectrix_dashboard_trains/  Departure board client and background refresh
+components/zectrix_dashboard_events/  Curated events.json client
 components/zectrix_demo_ui/         Canvas, bitmap font, menu UI        (upstream)
 components/zectrix_epd/             SSD2683 display driver              (upstream)
 components/zectrix_board/           Board pins and peripherals          (upstream)
@@ -127,7 +149,6 @@ and the hardware in [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ## Roadmap
 
-- Calendar and events in the bottom panel
 - Overnight sleep and slower refreshes off-peak to save battery
 
 ## Credits and licence

@@ -10,6 +10,7 @@ idf_component_register(SRCS "app_main.cc"
                        zectrix_dashboard_wifi
                        zectrix_dashboard_weather
                        zectrix_dashboard_trains
+                       zectrix_dashboard_events
                        zectrix_dashboard_view
                        EMBED_FILES
                        "assets/lighthouse_400x300_1bpp.bin"

@@ -69,7 +69,8 @@ bool Render(const Scenario& scenario, const std::string& out_dir, int scale) {
     static ZectrixCanvas canvas;
     ZectrixDashboardDrawAll(canvas,
                             scenario.weather_ok ? &scenario.weather : nullptr,
-                            scenario.trains, scenario.clock);
+                            scenario.trains, scenario.events,
+                            scenario.clock);
 
     const std::string base = out_dir + "/" + scenario.name;
     // name.png is the 16-gray frame; name-mono.png is the 1bpp frame used

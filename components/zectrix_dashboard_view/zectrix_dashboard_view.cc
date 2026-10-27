@@ -435,12 +435,71 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
     }
 }
 
-void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas) {
-    // Bottom: events and recommendations, below a hairline.
+namespace {
+
+// Copies text into out, cut with "..." so it fits max_width pixels. Never
+// splits the two-byte UTF-8 "£".
+void FitText(const ZectrixCanvas& canvas, const char* text, int max_width,
+             char* out, size_t size) {
+    std::snprintf(out, size, "%s", text);
+    if (canvas.TextWidth(out) <= max_width) {
+        return;
+    }
+    size_t length = std::strlen(out);
+    while (length > 0) {
+        --length;
+        if (length > 0 &&
+            static_cast<unsigned char>(out[length - 1]) == 0xC2) {
+            --length;
+        }
+        while (length > 0 &&
+               (out[length - 1] == ' ' || out[length - 1] == ',')) {
+            --length;
+        }
+        if (length + 4 > size) {
+            continue;
+        }
+        std::memcpy(out + length, "...", 4);
+        if (canvas.TextWidth(out) <= max_width) {
+            return;
+        }
+    }
+    out[0] = '\0';
+}
+
+}  // namespace
+
+void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas,
+                                const zectrix_events_data_t* events) {
+    // Bottom: curated picks, below a hairline. One line each: when (gray),
+    // what, and an inverted FREE/DEAL/BOOK tag on the right.
     TextGray(canvas, 12, 166, "Coming up", kLabel);
-    canvas.Text(12, 190, "Events for you and Margarida");
-    TextGray(canvas, 12, 212, "Calendar not connected", kLabel);
-    TextGray(canvas, 12, 234, "Recommendations not connected", kLabel);
+
+    if (events == nullptr || !events->valid) {
+        TextGray(canvas, 12, 190, "No picks yet", kLabel);
+        return;
+    }
+
+    for (int i = 0; i < events->count && i < ZECTRIX_EVENT_LINES; ++i) {
+        const zectrix_event_line_t& line = events->lines[i];
+        const int y = 190 + i * 24;
+
+        int text_right = 388;
+        if (line.tag[0] != '\0') {
+            const int tag_width = canvas.TextWidth(line.tag) + 6;
+            canvas.FillRect(388 - tag_width, y, tag_width, 16, true);
+            canvas.Text(388 - tag_width + 3, y, line.tag, 1, true);
+            text_right = 388 - tag_width - 6;
+        }
+
+        char when[16];
+        FitText(canvas, line.when, 80, when, sizeof(when));
+        TextGray(canvas, 12, y, when, kLabel);
+
+        char text[48];
+        FitText(canvas, line.text, text_right - 96, text, sizeof(text));
+        canvas.Text(96, y, text);
+    }
 }
 
 bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather) {
@@ -524,11 +583,12 @@ void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text) {
 void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
                              const zectrix_weather_data_t* weather,
                              const zectrix_trains_data_t& trains,
+                             const zectrix_events_data_t* events,
                              const char* clock_text) {
     canvas.Clear();
     ZectrixDashboardDrawWeather(canvas, weather, HourFromClock(clock_text));
     ZectrixDashboardDrawTrains(canvas, trains);
-    ZectrixDashboardDrawEvents(canvas);
+    ZectrixDashboardDrawEvents(canvas, events);
     ZectrixDashboardDrawClock(canvas, clock_text);
 
     // Hairlines instead of boxes, kept outside the partial-refresh windows.

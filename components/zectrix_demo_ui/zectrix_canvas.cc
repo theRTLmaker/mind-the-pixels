@@ -11,6 +11,29 @@ namespace {
 constexpr uint8_t kBayer4[4][4] = {
     {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
+// Hand-drawn pound sign (not in the generated ASCII font), sized like the
+// digits. Text and TextWidth accept it as UTF-8 "£" (0xC2 0xA3).
+constexpr uint16_t kPoundGlyph[16] = {
+    0x0000, 0x0000, 0x1c00, 0x2200, 0x2000, 0x2000, 0x2000, 0x7c00,
+    0x2000, 0x2000, 0x2000, 0x6000, 0x7f00, 0x0000, 0x0000, 0x0000};
+constexpr int kPoundWidth = 9;
+
+// Glyph for the character at *cursor, advancing past a two-byte "£".
+// Anything else outside printable ASCII draws as '?'.
+const uint16_t* GlyphAt(const unsigned char*& cursor, int* width) {
+    if (cursor[0] == 0xC2 && cursor[1] == 0xA3) {
+        ++cursor;
+        *width = kPoundWidth;
+        return kPoundGlyph;
+    }
+    unsigned char code = *cursor;
+    if (code < 0x20 || code > 0x7e) {
+        code = '?';
+    }
+    *width = kZectrixAsciiFontWidths[code - 0x20];
+    return kZectrixAsciiFont8x16[code - 0x20];
+}
+
 }  // namespace
 
 void ZectrixCanvas::Clear(bool white) {
@@ -117,13 +140,8 @@ void ZectrixCanvas::Text(int x, int y, const char* text, int scale,
     for (const unsigned char* cursor =
              reinterpret_cast<const unsigned char*>(text);
          *cursor != '\0'; ++cursor) {
-        unsigned char code = *cursor;
-        if (code < 0x20 || code > 0x7e) {
-            code = '?';
-        }
-        const size_t glyph_index = code - 0x20;
-        const uint16_t* glyph = kZectrixAsciiFont8x16[glyph_index];
-        const int glyph_width = kZectrixAsciiFontWidths[glyph_index];
+        int glyph_width = 0;
+        const uint16_t* glyph = GlyphAt(cursor, &glyph_width);
         if (inverted) {
             FillRect(cursor_x, y, glyph_width * scale, 16 * scale, true);
         }
@@ -156,11 +174,9 @@ int ZectrixCanvas::TextWidth(const char* text, int scale) const {
     for (const unsigned char* cursor =
              reinterpret_cast<const unsigned char*>(text);
          *cursor != '\0'; ++cursor) {
-        unsigned char code = *cursor;
-        if (code < 0x20 || code > 0x7e) {
-            code = '?';
-        }
-        width += kZectrixAsciiFontWidths[code - 0x20] * scale;
+        int glyph_width = 0;
+        GlyphAt(cursor, &glyph_width);
+        width += glyph_width * scale;
     }
     return width;
 }

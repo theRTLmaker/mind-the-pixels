@@ -6,6 +6,7 @@
 // runtime calls (networking, FreeRTOS, display refresh) so it builds on a host.
 
 #include "zectrix_canvas.h"
+#include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_weather.h"
 
@@ -34,7 +35,8 @@ void ZectrixDashboardDrawTrains(ZectrixCanvas& canvas,
                                 const zectrix_trains_data_t& trains);
 
 // Events area (placeholder until the calendar is connected).
-void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas);
+void ZectrixDashboardDrawEvents(ZectrixCanvas& canvas,
+                                const zectrix_events_data_t* events);
 
 // True when any hour today has a rain probability above 0%.
 bool ZectrixDashboardHasRain(const zectrix_weather_data_t* weather);
@@ -52,6 +54,7 @@ void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text);
 void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
                              const zectrix_weather_data_t* weather,
                              const zectrix_trains_data_t& trains,
+                             const zectrix_events_data_t* events,
                              const char* clock_text);
 
 #endif  // ZECTRIX_DASHBOARD_VIEW_H_

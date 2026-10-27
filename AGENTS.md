@@ -6,7 +6,7 @@ for what the project is and how to build it.
 ## Project
 
 Mind the Pixels is a personal London dashboard (weather, trains to St
-Pancras, later calendar) for the ZECTRIX NOTE4 DevKit: ESP32-S3, 16 MB
+Pancras, curated London events) for the ZECTRIX NOTE4 DevKit: ESP32-S3, 16 MB
 flash, 8 MB PSRAM, 400 × 300 SSD2683 e-paper with 1bpp full/partial and
 4bpp (16-gray) full refresh. It is built on Zectrix Lab's MIT-licensed
 reference demo (upstream: https://github.com/itopinion/zectrix-note4-epd-demo).
@@ -37,7 +37,9 @@ Intended public repository name: `mind-the-pixels`.
 - Don't push or create the GitHub repository unless asked.
 - Don't revert the `components/zectrix_epd/CMakeLists.txt` REQUIRES change;
   it is needed for ESP-IDF 5.5.
-- Don't implement calendar integration until the user asks for it.
+- The events taste profile, curation output and gist link live outside the
+  repo in `~/Documents/Projects/note4/events/` (personal data). Never copy
+  them, or the gist URL, into the repository.
 
 ## Architecture
 
@@ -60,6 +62,12 @@ Intended public repository name: `mind-the-pixels`.
   back to
   `https://huxley2.azurewebsites.net/departures/SFA/to/STP/3`. Refreshed
   every 60 s, cached on failure.
+- `components/zectrix_dashboard_events/`: fetches `events.json` from
+  `CONFIG_ZECTRIX_EVENTS_URL` (a secret gist, gitignored `sdkconfig`) with
+  the weather every 15 min and keeps up to four `screen` lines. The file is
+  written daily by the local scheduled task `mind-the-pixels-events`.
+- `ZectrixCanvas::Text` also draws UTF-8 "£" (hand-drawn glyph in
+  `zectrix_canvas.cc`); `TextGray` in the view is ASCII only.
 - Partial refresh regions are byte-aligned and exported from the view header
   (`kDashboardTrainsRefreshRect`, `kDashboardClockRefreshRect`). If you move
   the clock or train card, update them.

@@ -1,0 +1,13 @@
+menu "Dashboard events"
+
+config ZECTRIX_EVENTS_URL
+    string "events.json URL"
+    default ""
+    help
+        Raw URL of the curated events.json (e.g. a secret gist's
+        https://gist.githubusercontent.com/<user>/<id>/raw/events.json).
+        Leave empty to show "Events not connected". A secret gist URL is
+        private by obscurity only, so it lives in the gitignored sdkconfig;
+        never commit it.
+
+endmenu

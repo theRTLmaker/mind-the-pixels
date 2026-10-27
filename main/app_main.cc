@@ -25,6 +25,7 @@
 #include "zectrix_dashboard_wifi.h"
 #include "zectrix_dashboard_weather.h"
 #include "zectrix_dashboard_trains.h"
+#include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_view.h"
 
 extern "C" {
@@ -369,6 +370,11 @@ private:
         bool weather_ok = zectrix_dashboard_weather_fetch(&weather) == ESP_OK;
         int64_t last_weather_fetch_us = esp_timer_get_time();
 
+        // Curated picks for the "Coming up" panel (events.json, updated
+        // daily); fetched together with the weather.
+        zectrix_events_data_t events = {};
+        bool events_ok = zectrix_dashboard_events_fetch(&events) == ESP_OK;
+
         // Start background train updates.
         ESP_ERROR_CHECK(zectrix_dashboard_trains_start());
 
@@ -378,7 +384,8 @@ private:
         // the Mac simulator.
         char clock_text[8] = "--:--";
         ZectrixDashboardDrawAll(canvas, weather_ok ? &weather : nullptr,
-                                displayed_trains, clock_text);
+                                displayed_trains,
+                                events_ok ? &events : nullptr, clock_text);
 
         // 16-gray frame; the clock and train card then use partial
         // refreshes on top of it (experimental, see zectrix_epd.h).
@@ -391,21 +398,35 @@ private:
         while (true) {
             ZectrixButtonEvent event;
 
-            // Re-fetch the weather every 15 minutes. The weather panel and
-            // rain chart contain gray, which partial refreshes can't draw,
-            // so a change redraws everything with a gray full refresh. On
-            // failure the last good weather stays on screen.
+            // Re-fetch the weather and events every 15 minutes. Those
+            // panels contain gray, which partial refreshes can't draw, so a
+            // change redraws everything with a gray full refresh. On
+            // failure the last good data stays on screen.
             if (esp_timer_get_time() - last_weather_fetch_us >=
                 kDashboardWeatherRefreshUs) {
                 last_weather_fetch_us = esp_timer_get_time();
+                bool changed = false;
                 zectrix_weather_data_t fresh = {};
                 if (zectrix_dashboard_weather_fetch(&fresh) == ESP_OK &&
                     (!weather_ok ||
                      std::memcmp(&fresh, &weather, sizeof(fresh)) != 0)) {
                     weather = fresh;
                     weather_ok = true;
-                    ZectrixDashboardDrawAll(canvas, &weather,
-                                            displayed_trains, clock_text);
+                    changed = true;
+                }
+                zectrix_events_data_t fresh_events = {};
+                if (zectrix_dashboard_events_fetch(&fresh_events) == ESP_OK &&
+                    (!events_ok || std::memcmp(&fresh_events, &events,
+                                               sizeof(fresh_events)) != 0)) {
+                    events = fresh_events;
+                    events_ok = true;
+                    changed = true;
+                }
+                if (changed) {
+                    ZectrixDashboardDrawAll(
+                        canvas, weather_ok ? &weather : nullptr,
+                        displayed_trains, events_ok ? &events : nullptr,
+                        clock_text);
                     ESP_ERROR_CHECK(ui_.RefreshFullGray());
                 }
             }

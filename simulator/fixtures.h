@@ -4,8 +4,10 @@
 // Sample data for the Mac simulator. Add a scenario here to preview a new
 // weather or train condition without waiting for the live APIs.
 
+#include <cstdio>
 #include <vector>
 
+#include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_weather.h"
 
@@ -16,6 +18,7 @@ struct Scenario {
     zectrix_weather_data_t weather;
     zectrix_trains_data_t trains;
     const char* clock;
+    const zectrix_events_data_t* events = nullptr;
 };
 
 inline zectrix_weather_data_t Weather(int code, float temp, float feels,
@@ -98,33 +101,66 @@ inline const zectrix_trains_data_t kStale = Trains({
 inline const zectrix_trains_data_t kOneTrain = Trains({
     Train("23:41", "23:41", false, 7)});
 
+inline zectrix_event_line_t Pick(const char* when, const char* text,
+                                 const char* tag = "") {
+    zectrix_event_line_t line = {};
+    std::snprintf(line.when, sizeof(line.when), "%s", when);
+    std::snprintf(line.text, sizeof(line.text), "%s", text);
+    std::snprintf(line.tag, sizeof(line.tag), "%s", tag);
+    return line;
+}
+
+inline zectrix_events_data_t Picks(std::vector<zectrix_event_line_t> lines) {
+    zectrix_events_data_t data = {};
+    for (const zectrix_event_line_t& line : lines) {
+        if (data.count < ZECTRIX_EVENT_LINES) {
+            data.lines[data.count++] = line;
+        }
+    }
+    data.valid = data.count > 0;
+    return data;
+}
+
+inline const zectrix_events_data_t kPicks = Picks({
+    Pick("Fri 30", "Free jazz, Oxford House E2", "FREE"),
+    Pick("Sat-Sun", "East Asian Market, Canary Wharf"),
+    Pick("Fri 6 Nov", "Rachmaninoff 2, Barbican", "BOOK"),
+    Pick("13-22 Nov", "London Jazz Festival, from \u00a3" "5", "BOOK")});
+inline const zectrix_events_data_t kLongPicks = Picks({
+    Pick("Tonight", "Sample musical day seats \u00a3" "25, a very long venue name", "DEAL"),
+    Pick("Wednesday 4 Nov", "Sample fado night with a long artist and venue name"),
+    Pick("to 12 Apr", "Sample exhibition with a long title here", "BOOK")});
+
 inline const std::vector<Scenario>& Scenarios() {
     static const std::vector<Scenario> scenarios = {
         {"sunny", "Clear sky, trains on time", true,
-         Weather(0, 18.4f, 18.0f, 11, 21, 0, 52, 9), kOnTime, "10:42"},
+         Weather(0, 18.4f, 18.0f, 11, 21, 0, 52, 9), kOnTime, "10:42", &kPicks},
         {"partly-cloudy", "Weather code 2, one late and one cancelled", true,
-         Weather(2, 12.3f, 10.8f, 9, 14, 20, 71, 14), kMixed, "09:58"},
+         Weather(2, 12.3f, 10.8f, 9, 14, 20, 71, 14), kMixed, "09:58", &kPicks},
         {"overcast", "Weather code 3", true,
-         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "13:07"},
+         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "13:07", &kPicks},
         {"fog", "Weather code 45", true,
-         Weather(45, 6.2f, 4.1f, 4, 9, 10, 96, 4), kOnTime, "07:15"},
+         Weather(45, 6.2f, 4.1f, 4, 9, 10, 96, 4), kOnTime, "07:15", &kPicks},
         {"rain", "Weather code 61, disrupted trains", true,
          WithHourlyRain(Weather(61, 9.7f, 7.2f, 7, 11, 90, 93, 24),
                         {5, 5, 3, 0, 0, 0, 10, 35, 60, 45, 20, 10,
                          15, 40, 75, 90, 85, 60, 30, 15, 10, 5, 0, 0}),
-         kMixed, "17:32"},
+         kMixed, "17:32", &kPicks},
         {"drizzle", "Weather code 53", true,
-         Weather(53, 10.4f, 8.9f, 8, 12, 60, 90, 12), kOnTime, "11:26"},
+         Weather(53, 10.4f, 8.9f, 8, 12, 60, 90, 12), kOnTime, "11:26", &kPicks},
         {"snow", "Weather code 71", true,
-         Weather(71, -1.5f, -5.8f, -3, 1, 70, 88, 16), kOnTime, "08:04"},
+         Weather(71, -1.5f, -5.8f, -3, 1, 70, 88, 16), kOnTime, "08:04", &kPicks},
         {"storm", "Weather code 95", true,
-         Weather(95, 14.9f, 13.0f, 12, 17, 100, 85, 41), kMixed, "19:20"},
+         Weather(95, 14.9f, 13.0f, 12, 17, 100, 85, 41), kMixed, "19:20", &kPicks},
         {"late-night", "Only one departure left", true,
-         Weather(1, 7.0f, 5.5f, 5, 12, 0, 77, 6), kOneTrain, "23:30"},
+         Weather(1, 7.0f, 5.5f, 5, 12, 0, 77, 6), kOneTrain, "23:30", &kPicks},
         {"trains-stale", "Train fetches failing for 7 min, cached times", true,
-         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kStale, "09:58"},
+         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kStale, "09:58", &kPicks},
         {"trains-unavailable", "Trains never loaded, still retrying", true,
-         Weather(2, 12.3f, 10.8f, 9, 14, 20, 71, 14), kUnavailable, "09:58"},
+         Weather(2, 12.3f, 10.8f, 9, 14, 20, 71, 14), kUnavailable, "09:58", &kPicks},
+        {"events-long", "Long picks are cut with ... before the tag", true,
+         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "18:05",
+         &kLongPicks},
         {"offline", "No Wi-Fi: weather failed, trains still loading", false,
          {}, kLoading, "--:--"},
     };
