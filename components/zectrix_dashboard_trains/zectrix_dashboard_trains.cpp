@@ -1,5 +1,6 @@
 #include "zectrix_dashboard_trains.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -15,14 +16,19 @@
 
 namespace {
 constexpr char kTag[] = "dashboard_trains";
-// Official Rail Data Marketplace feed when a key is configured; the public
-// Huxley proxy otherwise, and as a fallback. Both return the LDBWS JSON
-// shape (trainServices, std, etd, isCancelled, destination[].crs).
+// Official Rail Data Marketplace feed (LDB staff version) when a key is
+// configured; the public Huxley proxy otherwise, and as a fallback. Both
+// return trainServices with std, etd, isCancelled and destination[].crs;
+// the staff version gives times as "yyyy-mm-ddThh:mm:ss" instead of "hh:mm".
 constexpr char kRdmUrl[] = CONFIG_ZECTRIX_TRAINS_RDM_URL;
 constexpr char kRdmApiKey[] = CONFIG_ZECTRIX_TRAINS_RDM_API_KEY;
+// Appended to kRdmUrl as /<crs>/<yyyymmddThhmmss>?<query>.
+constexpr char kRdmStation[] = "SFA";
+constexpr char kRdmQuery[] =
+    "numRows=5&filterCRS=STP&filterType=to&timeWindow=120";
 constexpr char kHuxleyUrl[] =
     "https://huxley2.azurewebsites.net/departures/SFA/to/STP/3";
-constexpr size_t kResponseCapacity = 16384;
+constexpr size_t kResponseCapacity = 32768;
 constexpr TickType_t kRefreshInterval = pdMS_TO_TICKS(60000);
 
 struct ResponseBuffer {
@@ -65,6 +71,14 @@ bool CopyTime(const cJSON *value, char out[6]) {
     }
 
     const char *time = value->valuestring;
+    // Staff version: "2026-10-27T10:15:00" -> "10:15".
+    char clock[6] = {};
+    const char *t = strchr(time, 'T');
+    if (t != nullptr && strlen(t + 1) >= 5) {
+        memcpy(clock, t + 1, 5);
+        clock[5] = '\0';
+        time = clock;
+    }
     if (strlen(time) != 5 || time[2] != ':' ||
         time[0] < '0' || time[0] > '9' ||
         time[1] < '0' || time[1] > '9' ||
@@ -156,6 +170,16 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
             continue;
         }
 
+        // Staff version keeps just-departed trains on the board; they carry
+        // an actual departure time instead of an estimate.
+        const cJSON *departure_type = GetField(service, "departureType");
+        if (cJSON_IsString(GetField(service, "atd")) ||
+            cJSON_IsTrue(GetField(service, "atdSpecified")) ||
+            (cJSON_IsString(departure_type) &&
+             strcmp(departure_type->valuestring, "Actual") == 0)) {
+            continue;
+        }
+
         zectrix_train_t train = {};
         if (!CopyTime(GetField(service, "std"), train.scheduled)) {
             continue;
@@ -171,8 +195,13 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
                      ? expected->valuestring : "(missing)",
                  train.cancelled ? "yes" : "no");
 
-        if (cJSON_IsString(expected) && expected->valuestring != nullptr &&
-            strcmp(expected->valuestring, "On time") != 0) {
+        // Staff version: delayed with no estimate has no etd at all.
+        if (!cJSON_IsString(expected) && cJSON_IsString(departure_type) &&
+            strcmp(departure_type->valuestring, "Delayed") == 0) {
+            strncpy(train.expected, "-----", sizeof(train.expected) - 1);
+        } else if (cJSON_IsString(expected) &&
+                   expected->valuestring != nullptr &&
+                   strcmp(expected->valuestring, "On time") != 0) {
             char revised[6] = {};
             if (CopyTime(expected, revised)) {
                 memcpy(train.expected, revised, sizeof(train.expected));
@@ -200,9 +229,27 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
     return true;
 }
 
+// The staff board takes the board time in the path, so it needs the real
+// (UK local) time from SNTP; until then only Huxley is used.
+bool BuildRdmUrl(char *out, size_t size) {
+    const time_t now = time(nullptr);
+    if (now < 1700000000) {
+        return false;
+    }
+    struct tm local_time = {};
+    localtime_r(&now, &local_time);
+    char board_time[16] = {};
+    strftime(board_time, sizeof(board_time), "%Y%m%dT%H%M%S", &local_time);
+    const int written = snprintf(out, size, "%s/%s/%s?%s", kRdmUrl,
+                                 kRdmStation, board_time, kRdmQuery);
+    return written > 0 && static_cast<size_t>(written) < size;
+}
+
 bool FetchTrains(zectrix_trains_data_t *result) {
     if (kRdmApiKey[0] != '\0') {
-        if (FetchTrainsFrom(kRdmUrl, kRdmApiKey, result)) {
+        char url[384];
+        if (BuildRdmUrl(url, sizeof(url)) &&
+            FetchTrainsFrom(url, kRdmApiKey, result)) {
             return true;
         }
         ESP_LOGW(kTag, "Rail Data Marketplace failed; trying Huxley");

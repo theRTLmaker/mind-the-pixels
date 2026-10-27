@@ -4,16 +4,16 @@ config ZECTRIX_TRAINS_RDM_API_KEY
     string "Rail Data Marketplace API key"
     default ""
     help
-        Consumer key for the Rail Data Marketplace "Live Departure Board"
-        product. Leave empty to use the public Huxley server only. Lives in
-        the gitignored sdkconfig; never commit it.
+        Consumer key for the Rail Data Marketplace "Live Departure Board -
+        Staff Version" product. Leave empty to use the public Huxley server
+        only. Lives in the gitignored sdkconfig; never commit it.
 
 config ZECTRIX_TRAINS_RDM_URL
-    string "Rail Data Marketplace departures URL"
-    default "https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120/GetDepartureBoard/SFA?numRows=10&filterCrs=STP&filterType=to"
+    string "Rail Data Marketplace departures base URL"
+    default "https://api1.raildata.org.uk/1010-live-departure-board---staff-version1_0/LDBSVWS/api/20220120/GetDepBoardWithDetails"
     help
-        Departure board request for Stratford International (SFA) filtered
-        to trains calling at St Pancras (STP). Check it against the
-        product's Specification tab.
+        GetDepBoardWithDetails endpoint without the trailing /{crs}/{time}.
+        The firmware appends /SFA/<yyyymmddThhmmss> and a query filtered to
+        trains calling at St Pancras (STP).
 
 endmenu
