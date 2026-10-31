@@ -225,9 +225,6 @@ inline const zectrix_outlook_data_t kOutlook = [] {
     std::snprintf(o.sunrise, 6, "06:53");
     std::snprintf(o.sunset, 6, "16:33");
     o.daylight_minutes = 580;
-    o.moon_phase = 0.62f;
-    o.aqi = 50;
-    o.pollen = 0;
     o.valid = true;
     return o;
 }();
@@ -272,7 +269,7 @@ inline const std::vector<Scenario>& Scenarios() {
          Weather(2, 10.6f, 9.1f, 7, 11, 90, 93, 24), kLoading, "07:12"},
         {"events-full", "Full-screen Coming up, page 1", true, {}, kLoading,
          "18:40", &kFullPicks},
-        {"weekend", "This weekend: forecast, picks, daylight and air", true,
+        {"weekend", "This weekend: forecast, picks, sunrise and sunset", true,
          {}, kLoading, "18:45", &kFullPicks},
         {"events-page2", "Full-screen Coming up, page 2", true, {}, kLoading,
          "18:41", &kFullPicks},

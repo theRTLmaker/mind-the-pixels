@@ -27,9 +27,9 @@ splash, then the dashboard.
 1. **Dashboard**: weather, clock, trains to St Pancras and four picks (below).
 2. **Coming up**: up to 12 curated picks, six per page, with when, price and
    venue; pages turn every minute with a quick black-and-white refresh.
-3. **This weekend**: Saturday and Sunday forecasts, weekend picks, and
-   today's sunrise, sunset, moon phase, air quality and pollen
-   ([Open-Meteo](https://open-meteo.com/) forecast and air-quality APIs).
+3. **This weekend**: Saturday and Sunday forecasts, up to four weekend
+   picks, and today's sunrise and sunset ([Open-Meteo](https://open-meteo.com/)
+   forecast).
 4. **Commute**: Margarida's journey between Stratford International and
    Cambridge, changing at St Pancras (Thameslink) or King's Cross (Great
    Northern). Before 14:00 it shows the way there, after that the way home:

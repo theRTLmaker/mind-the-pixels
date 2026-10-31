@@ -92,7 +92,7 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
                                  const char* clock_text);
 
 // The coming weekend: Saturday and Sunday weather, weekend picks, and
-// today's daylight, moon, air quality and pollen. The clock window is
+// today's sunrise and sunset. The clock window is
 // kEventsClockRefreshRect, as on the events view.
 void ZectrixDashboardDrawWeekend(ZectrixCanvas& canvas,
                                  const zectrix_outlook_data_t* outlook,

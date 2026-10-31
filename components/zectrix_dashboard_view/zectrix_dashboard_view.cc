@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#include <cmath>
 
 #include "zectrix_ascii_font_8x16.h"
 
@@ -826,54 +825,6 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
 
 namespace {
 
-// Moon of radius r: lit part white, dark part gray, black outline.
-void DrawMoon(ZectrixCanvas& canvas, int cx, int cy, int r, float phase) {
-    const float terminator = std::cos(phase * 2.0f * 3.14159265f);
-    for (int dy = -r; dy <= r; ++dy) {
-        const float half = std::sqrt(static_cast<float>(r * r - dy * dy));
-        for (int dx = -r; dx <= r; ++dx) {
-            const int d2 = dx * dx + dy * dy;
-            if (d2 > r * r) {
-                continue;
-            }
-            // Waxing: lit from the right; waning: lit from the left.
-            const bool lit = phase < 0.5f ? dx > half * terminator
-                                          : dx < -half * terminator;
-            const bool edge = d2 > (r - 1) * (r - 1);
-            canvas.GrayPixel(cx + dx, cy + dy, edge ? 0 : (lit ? 15 : 3));
-        }
-    }
-}
-
-const char* MoonName(float phase) {
-    if (phase < 0.03f || phase > 0.97f) return "New moon";
-    if (phase < 0.22f) return "Waxing crescent";
-    if (phase < 0.28f) return "First quarter";
-    if (phase < 0.47f) return "Waxing gibbous";
-    if (phase < 0.53f) return "Full moon";
-    if (phase < 0.72f) return "Waning gibbous";
-    if (phase < 0.78f) return "Last quarter";
-    return "Waning crescent";
-}
-
-const char* AirWord(int aqi) {
-    if (aqi < 0) return "-";
-    if (aqi <= 20) return "Good";
-    if (aqi <= 40) return "Fair";
-    if (aqi <= 60) return "Moderate";
-    if (aqi <= 80) return "Poor";
-    if (aqi <= 100) return "Very poor";
-    return "Extremely poor";
-}
-
-const char* PollenWord(float pollen) {
-    if (pollen < 0) return "-";
-    if (pollen < 1) return "None";
-    if (pollen < 10) return "Low";
-    if (pollen < 50) return "Moderate";
-    return "High";
-}
-
 // "15" plus a degree ring at scale; returns the width drawn.
 int DrawTemperature(ZectrixCanvas& canvas, int x, int y, float celsius,
                     int scale, uint8_t level) {
@@ -935,13 +886,15 @@ void ZectrixDashboardDrawWeekend(ZectrixCanvas& canvas,
     canvas.FillRectGray(12, 156, 376, 1, kRule);
 
     // Weekend picks, one line each like the dashboard panel.
-    TextGray(canvas, 12, 160, "Weekend picks", kLabel);
+    TextGray(canvas, 12, 162, "Weekend picks", kLabel);
     if (events == nullptr || events->weekend_count == 0) {
-        TextGray(canvas, 12, 180, "Nothing picked yet", kLabel);
+        TextGray(canvas, 12, 184, "Nothing picked yet", kLabel);
     } else {
-        for (int i = 0; i < events->weekend_count && i < 3; ++i) {
+        for (int i = 0;
+             i < events->weekend_count && i < ZECTRIX_EVENT_WEEKEND_LINES;
+             ++i) {
             const zectrix_event_line_t& line = events->weekend[i];
-            const int y = 180 + i * 22;
+            const int y = 184 + i * 22;
             int text_right = 388;
             if (line.tag[0] != '\0') {
                 const int tag_width = canvas.TextWidth(line.tag) + 6;
@@ -957,22 +910,15 @@ void ZectrixDashboardDrawWeekend(ZectrixCanvas& canvas,
             canvas.Text(96, y, text);
         }
     }
-    canvas.FillRectGray(12, 248, 376, 1, kRule);
 
-    // Daylight and air.
     if (outlook != nullptr && outlook->valid) {
+        canvas.FillRectGray(12, 272, 376, 1, kRule);
         char line[64];
         std::snprintf(line, sizeof(line), "Sunrise %s  Sunset %s  (%dh%02d)",
                       outlook->sunrise, outlook->sunset,
                       outlook->daylight_minutes / 60,
                       outlook->daylight_minutes % 60);
-        canvas.Text(12, 256, line);
-        std::snprintf(line, sizeof(line), "Air %s  -  Pollen %s",
-                      AirWord(outlook->aqi), PollenWord(outlook->pollen));
-        canvas.Text(12, 276, line);
-        const char* moon = MoonName(outlook->moon_phase);
-        TextGray(canvas, 356 - canvas.TextWidth(moon), 276, moon, kLabel);
-        DrawMoon(canvas, 373, 272, 14, outlook->moon_phase);
+        TextGray(canvas, 12, 280, line, kLabel);
     }
 }
 

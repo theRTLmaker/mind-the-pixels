@@ -30,6 +30,7 @@ target_include_directories(mtp_sim PRIVATE
     ${REPO_ROOT}/components/zectrix_demo_ui/font
     ${REPO_ROOT}/components/zectrix_dashboard_weather/include
     ${REPO_ROOT}/components/zectrix_dashboard_trains/include
+    ${REPO_ROOT}/components/zectrix_http/include
     ${REPO_ROOT}/components/zectrix_dashboard_events/include
     ${REPO_ROOT}/components/zectrix_dashboard_commute/include
     ${REPO_ROOT}/components/zectrix_dashboard_outlook/include

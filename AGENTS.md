@@ -60,8 +60,9 @@ Intended public repository name: `mind-the-pixels`.
   (`ZectrixPanel`: 1bpp/gray full refresh and 1bpp partials over a gray
   base).
 - `components/zectrix_dashboard_outlook/`: Open-Meteo 8-day forecast
-  (picks the coming Saturday/Sunday) plus air quality and pollen, and the
-  moon phase computed locally; fetched at most hourly.
+  (picks the coming Saturday/Sunday) plus today's sunrise and sunset;
+  fetched at most hourly. (Air quality, pollen and moon phase were tried
+  and dropped at the user's request.)
 - `components/zectrix_http/`: shared `zectrix_http_get()` and streaming
   `zectrix_http_get_stream()`, used by the trains, commute and outlook data (weather and events still have their
   own small clients).

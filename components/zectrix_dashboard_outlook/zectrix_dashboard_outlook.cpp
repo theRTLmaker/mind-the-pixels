@@ -1,6 +1,5 @@
 #include "zectrix_dashboard_outlook.h"
 
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -22,16 +21,6 @@ constexpr char kForecastUrl[] =
     "precipitation_probability_max,wind_speed_10m_max,sunrise,sunset,"
     "daylight_duration"
     "&forecast_days=8&timezone=Europe%2FLondon";
-constexpr char kAirUrl[] =
-    "https://air-quality-api.open-meteo.com/v1/air-quality"
-    "?latitude=51.5072&longitude=-0.1276"
-    "&current=european_aqi,alder_pollen,birch_pollen,grass_pollen,"
-    "mugwort_pollen,ragweed_pollen"
-    "&timezone=Europe%2FLondon";
-
-// A reference new moon (2000-01-06 18:14 UTC) and the synodic month.
-constexpr double kNewMoonEpoch = 947182440.0;
-constexpr double kSynodicDays = 29.530588853;
 
 const cJSON* Field(const cJSON* object, const char* name) {
     return cJSON_GetObjectItemCaseSensitive(object, name);
@@ -132,28 +121,6 @@ bool ParseForecast(const char* body, zectrix_outlook_data_t* out) {
     return out->day_count > 0;
 }
 
-void ParseAir(const char* body, zectrix_outlook_data_t* out) {
-    cJSON* root = cJSON_Parse(body);
-    if (root == nullptr) {
-        return;
-    }
-    const cJSON* current = Field(root, "current");
-    const cJSON* aqi = Field(current, "european_aqi");
-    if (cJSON_IsNumber(aqi)) {
-        out->aqi = aqi->valueint;
-    }
-    static const char* const kPollen[] = {"alder_pollen", "birch_pollen",
-                                          "grass_pollen", "mugwort_pollen",
-                                          "ragweed_pollen"};
-    for (const char* name : kPollen) {
-        const cJSON* value = Field(current, name);
-        if (cJSON_IsNumber(value) && value->valuedouble > out->pollen) {
-            out->pollen = static_cast<float>(value->valuedouble);
-        }
-    }
-    cJSON_Delete(root);
-}
-
 }  // namespace
 
 extern "C" esp_err_t
@@ -167,12 +134,6 @@ zectrix_dashboard_outlook_fetch(zectrix_outlook_data_t* out) {
     }
 
     zectrix_outlook_data_t parsed = {};
-    parsed.aqi = -1;
-    parsed.pollen = -1;
-    const double age_days =
-        (static_cast<double>(now) - kNewMoonEpoch) / 86400.0;
-    parsed.moon_phase = static_cast<float>(
-        std::fmod(age_days, kSynodicDays) / kSynodicDays);
 
     char* body = zectrix_http_get(kForecastUrl, nullptr, 8192);
     if (body == nullptr) {
@@ -185,17 +146,10 @@ zectrix_dashboard_outlook_fetch(zectrix_outlook_data_t* out) {
         return ESP_FAIL;
     }
 
-    // Air quality is optional; the screen shows "-" without it.
-    body = zectrix_http_get(kAirUrl, nullptr, 2048);
-    if (body != nullptr) {
-        ParseAir(body, &parsed);
-        free(body);
-    }
-
     parsed.valid = true;
     *out = parsed;
-    ESP_LOGI(kTag, "Weekend %s / %s, sun %s-%s, AQI %d, pollen %.0f",
-             parsed.days[0].label, parsed.day_count > 1 ? parsed.days[1].label : "-",
-             parsed.sunrise, parsed.sunset, parsed.aqi, parsed.pollen);
+    ESP_LOGI(kTag, "Weekend %s / %s, sun %s-%s", parsed.days[0].label,
+             parsed.day_count > 1 ? parsed.days[1].label : "-",
+             parsed.sunrise, parsed.sunset);
     return ESP_OK;
 }
