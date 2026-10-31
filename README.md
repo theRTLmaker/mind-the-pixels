@@ -161,7 +161,7 @@ components/zectrix_dashboard_weather/ Open-Meteo client
 components/zectrix_dashboard_trains/  Departure board client and background refresh
 components/zectrix_dashboard_events/  Curated events.json client
 components/zectrix_dashboard_commute/ Stratford <-> Cambridge connections
-components/zectrix_dashboard_outlook/ Weekend forecast, daylight, air and pollen
+components/zectrix_dashboard_outlook/ Weekend forecast, sunrise and sunset
 components/zectrix_http/            Shared HTTPS GET helper
 components/zectrix_demo_ui/         Canvas, bitmap font, panel refresh  (upstream, trimmed)
 components/zectrix_epd/             SSD2683 display driver              (upstream)
