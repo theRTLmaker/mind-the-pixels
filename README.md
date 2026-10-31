@@ -33,7 +33,8 @@ splash, then the dashboard.
 4. **Commute**: Margarida's journey between Stratford International and
    Cambridge, changing at St Pancras (Thameslink) or King's Cross (Great
    Northern). Before 14:00 it shows the way there, after that the way home:
-   three connections, each with the live leave and arrive times, a status
+   three connections, each with the live leave and arrive times, the total
+   journey time, a status
    (on time, minutes late, or delayed with no estimate), both trains with
    late times inverted, and the time to change or the planned times. It
    needs the Rail Data Marketplace key and refreshes every 2 minutes.

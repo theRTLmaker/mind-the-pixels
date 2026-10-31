@@ -818,6 +818,13 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
         std::snprintf(summary, sizeof(summary), "%s  ->  %s", leave, arrive);
         canvas.Text(12, y, summary);
         canvas.Text(13, y, summary);
+        // Door-to-door time with live times, to compare the options.
+        const int total = MinutesBetween(j.leg1_dep_expected,
+                                         j.leg2_arr_expected);
+        char duration[16];
+        std::snprintf(duration, sizeof(duration), "%dh%02d", total / 60,
+                      total % 60);
+        canvas.Text(26 + canvas.TextWidth(summary), y, duration);
 
         const int late = MinutesBetween(j.leg2_arr, j.leg2_arr_expected);
         char status[20];
