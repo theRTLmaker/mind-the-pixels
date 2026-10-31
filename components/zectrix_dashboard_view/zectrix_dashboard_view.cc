@@ -807,9 +807,9 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
 void ZectrixDashboardDrawSplash(ZectrixCanvas& canvas, const char* status) {
     canvas.Clear();
     canvas.TextCentered(58, "MIND THE PIXELS", 2);
-    const char* subtitle = "a personal London dashboard";
-    TextGray(canvas, (ZectrixCanvas::kWidth - canvas.TextWidth(subtitle)) / 2,
-             100, subtitle, kLabel);
+    // Solid black text: the splash uses a fast 1bpp refresh, where gray
+    // text would break up into dither dots.
+    canvas.TextCentered(100, "a personal London dashboard");
 
     // Platform edge: the coping stone, the dashed warning line, then the
     // platform surface with tactile paving, all the way across the panel.
@@ -826,9 +826,7 @@ void ZectrixDashboardDrawSplash(ZectrixCanvas& canvas, const char* status) {
     }
 
     if (status != nullptr && status[0] != '\0') {
-        TextGray(canvas,
-                 (ZectrixCanvas::kWidth - canvas.TextWidth(status)) / 2, 252,
-                 status, kLabel);
+        canvas.TextCentered(252, status);
     }
 }
 
