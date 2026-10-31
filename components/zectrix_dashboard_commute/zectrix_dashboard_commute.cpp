@@ -125,18 +125,25 @@ zectrix_dashboard_commute_fetch(zectrix_commute_data_t* out) {
             break;
         }
         zectrix_journey_t& journey = parsed.journeys[parsed.count++];
+        snprintf(journey.leg1_from, sizeof(journey.leg1_from), "%s",
+                 leg1.from);
+        snprintf(journey.leg1_to, sizeof(journey.leg1_to), "%s", leg1.to);
         FormatMinutes(leg1.dep, journey.leg1_dep);
         FormatMinutes(leg1.dep_expected, journey.leg1_dep_expected);
-        snprintf(journey.change_at, sizeof(journey.change_at), "%s",
-                 outbound ? best->from : leg1.to);
-        FormatMinutes(leg1.arr, journey.change_arr);
-        FormatMinutes(leg1.arr_expected, journey.change_arr_expected);
+        FormatMinutes(leg1.arr, journey.leg1_arr);
+        FormatMinutes(leg1.arr_expected, journey.leg1_arr_expected);
+        snprintf(journey.leg2_from, sizeof(journey.leg2_from), "%s",
+                 best->from);
+        snprintf(journey.leg2_to, sizeof(journey.leg2_to), "%s", best->to);
         FormatMinutes(best->dep, journey.leg2_dep);
         FormatMinutes(best->dep_expected, journey.leg2_dep_expected);
-        FormatMinutes(best->arr, journey.final_arr);
-        FormatMinutes(best->arr_expected, journey.final_arr_expected);
+        FormatMinutes(best->arr, journey.leg2_arr);
+        FormatMinutes(best->arr_expected, journey.leg2_arr_expected);
+        snprintf(journey.leg2_operator, sizeof(journey.leg2_operator), "%s",
+                 best->operator_name);
         journey.change_minutes =
             static_cast<int>(best->dep_expected - leg1.arr_expected);
+        journey.delayed = leg1.delayed || best->delayed;
         previous_second = best;
     }
 

@@ -21,6 +21,8 @@ struct BoardLeg {
     int64_t dep_expected;
     int64_t arr;
     int64_t arr_expected;
+    char operator_name[24];  // e.g. "Thameslink", "Great Northern"
+    bool delayed;            // "Delayed" with no estimate yet
 };
 
 // "2026-11-02T07:31:30" -> minutes since 1970 (fields taken as given).
@@ -55,6 +57,7 @@ private:
         char std[kTextSize];
         char etd[kTextSize];
         char departure_type[16];
+        char operator_name[24];
         bool departed;
         bool cancelled;
         bool found;

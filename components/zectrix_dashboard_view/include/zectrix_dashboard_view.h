@@ -44,7 +44,7 @@ inline constexpr ZectrixDashboardRect kEventsPageRefreshRect = {
 inline constexpr ZectrixDashboardRect kCommuteHeaderRefreshRect = {
     72, 0, 328, 44};
 inline constexpr ZectrixDashboardRect kCommuteRowsRefreshRect = {
-    0, 72, 400, 228};
+    0, 48, 400, 252};
 
 // Weather area. Pass nullptr when the weather fetch failed. On days with
 // rain the hourly chart replaces humidity and wind; hours before

@@ -196,6 +196,9 @@ void BoardStream::OnValue(const char* key, const char* value,
             Copy(service_.etd, sizeof(service_.etd), value);
         } else if (std::strcmp(key, "atd") == 0 && is_string) {
             service_.departed = true;
+        } else if (std::strcmp(key, "operator") == 0 && is_string) {
+            Copy(service_.operator_name, sizeof(service_.operator_name),
+                 value);
         } else if (std::strcmp(key, "departureType") == 0 && is_string) {
             Copy(service_.departure_type, sizeof(service_.departure_type),
                  value);
@@ -242,8 +245,11 @@ void BoardStream::FinishService() {
         !ParseBoardMinutes(service_.sta, &leg.arr)) {
         return;
     }
+    Copy(leg.operator_name, sizeof(leg.operator_name),
+         service_.operator_name);
     if (!ParseBoardMinutes(service_.etd, &leg.dep_expected)) {
         leg.dep_expected = leg.dep;
+        leg.delayed = std::strcmp(service_.departure_type, "Delayed") == 0;
     }
     if (!ParseBoardMinutes(service_.eta, &leg.arr_expected) &&
         !ParseBoardMinutes(service_.ata, &leg.arr_expected)) {

@@ -180,40 +180,50 @@ inline const zectrix_events_data_t kLongPicks = Picks({
     Pick("Wednesday 4 Nov", "Sample fado night with a long artist and venue name"),
     Pick("to 12 Apr", "Sample exhibition with a long title here", "BOOK")});
 
-inline zectrix_journey_t Journey(const char* d1, const char* d1x,
-                                 const char* at, const char* a1,
-                                 const char* a1x, const char* d2,
-                                 const char* d2x, const char* a2,
-                                 const char* a2x, int change) {
+inline zectrix_journey_t Journey(const char* from, const char* d1,
+                                 const char* d1x, const char* at,
+                                 const char* a1, const char* a1x,
+                                 const char* from2, const char* d2,
+                                 const char* d2x, const char* to,
+                                 const char* a2, const char* a2x,
+                                 const char* op, int change,
+                                 bool delayed = false) {
     zectrix_journey_t j = {};
+    std::snprintf(j.leg1_from, 4, "%s", from);
     std::snprintf(j.leg1_dep, 6, "%s", d1);
     std::snprintf(j.leg1_dep_expected, 6, "%s", d1x);
-    std::snprintf(j.change_at, 4, "%s", at);
-    std::snprintf(j.change_arr, 6, "%s", a1);
-    std::snprintf(j.change_arr_expected, 6, "%s", a1x);
+    std::snprintf(j.leg1_to, 4, "%s", at);
+    std::snprintf(j.leg1_arr, 6, "%s", a1);
+    std::snprintf(j.leg1_arr_expected, 6, "%s", a1x);
+    std::snprintf(j.leg2_from, 4, "%s", from2);
     std::snprintf(j.leg2_dep, 6, "%s", d2);
     std::snprintf(j.leg2_dep_expected, 6, "%s", d2x);
-    std::snprintf(j.final_arr, 6, "%s", a2);
-    std::snprintf(j.final_arr_expected, 6, "%s", a2x);
+    std::snprintf(j.leg2_to, 4, "%s", to);
+    std::snprintf(j.leg2_arr, 6, "%s", a2);
+    std::snprintf(j.leg2_arr_expected, 6, "%s", a2x);
+    std::snprintf(j.leg2_operator, 24, "%s", op);
     j.change_minutes = change;
+    j.delayed = delayed;
     return j;
 }
 
-// Illustrative times only (shape of the live data, not a real timetable).
+// Illustrative times only (shape of the live data, not a real timetable):
+// on time, running late, and delayed with no estimate.
 inline const zectrix_commute_data_t kCommuteAm = [] {
     zectrix_commute_data_t c = {};
     c.outbound = true;
     c.valid = true;
-    std::snprintf(c.updated, 6, "07:12");
-    c.journeys[0] = Journey("07:16", "07:16", "KGX", "07:23", "07:23",
-                            "07:44", "07:44", "08:31", "08:31", 21);
-    c.journeys[1] = Journey("07:31", "07:34", "STP", "07:38", "07:41",
-                            "07:52", "07:52", "08:51", "08:51", 11);
-    c.journeys[2] = Journey("07:46", "07:46", "KGX", "07:53", "07:53",
-                            "08:14", "08:19", "09:01", "09:06", 26);
-    c.journeys[3] = Journey("08:01", "08:01", "STP", "08:08", "08:08",
-                            "08:22", "08:22", "09:21", "09:21", 14);
-    c.count = 4;
+    std::snprintf(c.updated, 6, "09:28");
+    c.journeys[0] = Journey("SFA", "09:31", "09:31", "STP", "09:38", "09:38",
+                            "STP", "10:01", "10:01", "CBG", "11:09", "11:09",
+                            "Thameslink", 23);
+    c.journeys[1] = Journey("SFA", "10:01", "10:05", "STP", "10:08", "10:12",
+                            "KGX", "10:24", "10:28", "CBG", "11:14", "11:18",
+                            "Great Northern", 16);
+    c.journeys[2] = Journey("SFA", "10:11", "10:11", "STP", "10:18", "10:18",
+                            "STP", "10:31", "10:31", "CBG", "11:39", "11:39",
+                            "Thameslink", 13, true);
+    c.count = 3;
     return c;
 }();
 

@@ -708,6 +708,8 @@ const char* WeatherWord(int code) {
 const char* StationName(const char* crs) {
     if (std::strcmp(crs, "KGX") == 0) return "King's Cross";
     if (std::strcmp(crs, "STP") == 0) return "St Pancras";
+    if (std::strcmp(crs, "SFA") == 0) return "Stratford";
+    if (std::strcmp(crs, "CBG") == 0) return "Cambridge";
     return crs;
 }
 
@@ -727,6 +729,35 @@ int DrawLiveTime(ZectrixCanvas& canvas, int x, int y, const char* timetable,
     }
     canvas.Text(x, y, text, 1, late);
     return canvas.TextWidth(text);
+}
+
+// Minutes from "HH:MM" a to b, across midnight when b looks earlier.
+int MinutesBetween(const char* a, const char* b) {
+    const int from = ((a[0] - '0') * 10 + (a[1] - '0')) * 60 +
+                     (a[3] - '0') * 10 + (a[4] - '0');
+    const int to = ((b[0] - '0') * 10 + (b[1] - '0')) * 60 +
+                   (b[3] - '0') * 10 + (b[4] - '0');
+    int diff = to - from;
+    if (diff < -720) diff += 1440;
+    if (diff > 720) diff -= 1440;
+    return diff;
+}
+
+// "Stratford 09:31  >  St Pancras 09:38" with live times, inverted when
+// they differ from the timetable.
+void DrawLegLine(ZectrixCanvas& canvas, int x, int y, const char* from,
+                 const char* dep, const char* dep_expected, const char* to,
+                 const char* arr, const char* arr_expected) {
+    const char* from_name = StationName(from);
+    canvas.Text(x, y, from_name);
+    x += canvas.TextWidth(from_name) + 6;
+    x += DrawLiveTime(canvas, x, y, dep, dep_expected) + 8;
+    canvas.Text(x, y, ">");
+    x += canvas.TextWidth(">") + 8;
+    const char* to_name = StationName(to);
+    canvas.Text(x, y, to_name);
+    x += canvas.TextWidth(to_name) + 6;
+    DrawLiveTime(canvas, x, y, arr, arr_expected);
 }
 
 }  // namespace
@@ -767,57 +798,79 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
     }
     canvas.FillRectGray(12, 46, 376, 1, kRule);
 
-    const char* from = outbound ? "Stratford" : "Cambridge";
-    const char* to = outbound ? "Cambridge" : "Stratford";
-    TextGray(canvas, 12, 52, from, kLabel);
-    TextGray(canvas, 92, 52, "London", kLabel);
-    TextGray(canvas, 186, 52, "Change", kLabel);
-    TextGray(canvas, 304, 52, to, kLabel);
-
     if (commute == nullptr || !commute->valid) {
-        canvas.Text(12, 82, "No connections right now");
+        canvas.Text(12, 64, "No connections right now");
         return;
     }
 
+    // One block per journey: the live leave/arrive times in bold with a
+    // status on the right, the two trains, then the change (or, when late,
+    // the planned times). Live times that differ from the timetable are
+    // inverted. Black and white only: the rows update partially.
     for (int i = 0; i < commute->count && i < ZECTRIX_COMMUTE_JOURNEYS; ++i) {
         const zectrix_journey_t& j = commute->journeys[i];
-        const int y = 76 + i * 56;
+        const int y = 54 + i * 82;
 
-        DrawLiveTime(canvas, 12, y, j.leg1_dep, j.leg1_dep_expected);
-        canvas.Text(62, y, "->");
-        DrawLiveTime(canvas, 92, y, j.change_arr, j.change_arr_expected);
-        const int x = 186 + DrawLiveTime(canvas, 186, y, j.leg2_dep,
-                                         j.leg2_dep_expected);
-        canvas.Text(x + 6, y, j.change_at);
-        canvas.Text(276, y, "->");
-        DrawLiveTime(canvas, 304, y, j.final_arr, j.final_arr_expected);
+        char leave[6], arrive[6];
+        ShortTime(j.leg1_dep_expected, leave);
+        ShortTime(j.leg2_arr_expected, arrive);
+        char summary[24];
+        std::snprintf(summary, sizeof(summary), "%s  ->  %s", leave, arrive);
+        canvas.Text(12, y, summary);
+        canvas.Text(13, y, summary);
 
-        const bool on_time =
-            std::strcmp(j.leg1_dep, j.leg1_dep_expected) == 0 &&
-            std::strcmp(j.change_arr, j.change_arr_expected) == 0 &&
-            std::strcmp(j.leg2_dep, j.leg2_dep_expected) == 0 &&
-            std::strcmp(j.final_arr, j.final_arr_expected) == 0;
-        char detail[96];
-        if (on_time) {
-            std::snprintf(detail, sizeof(detail),
-                          "On time  -  %d min to change at %s",
-                          j.change_minutes, StationName(j.change_at));
+        const int late = MinutesBetween(j.leg2_arr, j.leg2_arr_expected);
+        char status[20];
+        bool flag = true;
+        if (j.delayed) {
+            std::snprintf(status, sizeof(status), "DELAYED");
+        } else if (late > 0) {
+            std::snprintf(status, sizeof(status), "%d MIN LATE", late);
         } else {
-            char a[6], b[6], c[6], d[6];
-            ShortTime(j.leg1_dep, a);
-            ShortTime(j.change_arr, b);
-            ShortTime(j.leg2_dep, c);
-            ShortTime(j.final_arr, d);
-            std::snprintf(detail, sizeof(detail),
-                          "Timetable %s>%s %s>%s (%d min)", a, b, c, d,
-                          j.change_minutes);
+            std::snprintf(status, sizeof(status), "On time");
+            flag = false;
         }
-        char fitted[96];
-        FitText(canvas, detail, 376, fitted, sizeof(fitted));
-        canvas.Text(12, y + 20, fitted);
+        const int status_width = canvas.TextWidth(status);
+        if (flag) {
+            canvas.FillRect(388 - status_width - 6, y, status_width + 6, 16,
+                            true);
+            canvas.Text(388 - status_width - 3, y, status, 1, true);
+        } else {
+            canvas.Text(388 - status_width, y, status);
+        }
+
+        DrawLegLine(canvas, 24, y + 20, j.leg1_from, j.leg1_dep,
+                    j.leg1_dep_expected, j.leg1_to, j.leg1_arr,
+                    j.leg1_arr_expected);
+        DrawLegLine(canvas, 24, y + 38, j.leg2_from, j.leg2_dep,
+                    j.leg2_dep_expected, j.leg2_to, j.leg2_arr,
+                    j.leg2_arr_expected);
+
+        char note[64];
+        const bool on_plan =
+            !j.delayed && std::strcmp(j.leg1_dep, j.leg1_dep_expected) == 0 &&
+            std::strcmp(j.leg2_arr, j.leg2_arr_expected) == 0;
+        if (j.delayed) {
+            std::snprintf(note, sizeof(note), "No new time yet  -  %s",
+                          j.leg2_operator);
+        } else if (on_plan) {
+            std::snprintf(note, sizeof(note), "%d min to change  -  %s",
+                          j.change_minutes, j.leg2_operator);
+        } else {
+            char planned_leave[6], planned_arrive[6];
+            ShortTime(j.leg1_dep, planned_leave);
+            ShortTime(j.leg2_arr, planned_arrive);
+            std::snprintf(note, sizeof(note),
+                          "Planned %s -> %s  -  %d min to change",
+                          planned_leave, planned_arrive, j.change_minutes);
+        }
+        char fitted[64];
+        FitText(canvas, note, 364, fitted, sizeof(fitted));
+        canvas.Text(24, y + 56, fitted);
+
         if (i + 1 < commute->count) {
             for (int x = 12; x < 388; x += 3) {
-                canvas.Pixel(x, y + 46, true);
+                canvas.Pixel(x, y + 77, true);
             }
         }
     }
