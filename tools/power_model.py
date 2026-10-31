@@ -29,7 +29,8 @@ class Params:
     # typical for an ESP32-S3 module with PSRAM. Auto light sleep keeps Wi-Fi
     # associated (waking for DTIM beacons) at ~2-4 mA.
     idle_ma: float = 35.0
-    # Audio rail (ES8311 codec + amplifier) powered at boot but unused.
+    # "Audio" rail (ES8311 codec + amplifier). It also powers the I2C bus
+    # (RTC, NFC): every I2C transfer switches it on, so it stays on.
     audio_rail_ma: float = 3.0
 
     # HTTPS request: TLS handshake + transfer at Wi-Fi active current.
@@ -91,14 +92,13 @@ def days(p: Params) -> float:
     return p.battery_mah * p.usable_fraction / sum(daily_budget(p).values())
 
 
-# Candidate changes, each applied on top of the previous one.
+# Changes, each applied on top of the previous one. The first three are
+# in the firmware since 2026-10-31.
 STEPS = [
-    ("Today (no power management)", lambda p: p),
-    ("Switch off the unused audio rail",
-     lambda p: replace(p, audio_rail_ma=0.0)),
-    ("Auto light sleep (CPU sleeps, Wi-Fi stays connected)",
+    ("Before power management", lambda p: p),
+    ("[done] Auto light sleep (CPU sleeps, Wi-Fi stays connected)",
      lambda p: replace(p, idle_ma=3.0)),
-    ("Trains every minute 06-10 and 16-20 only, every 5 min otherwise",
+    ("[done] Trains every minute 06-10 and 16-20, every 5 min otherwise",
      lambda p: replace(p, train_fetch_per_h=(8 * 60 + 9 * 12) / DAY_HOURS)),
     ("Clock to a 5-minute display update outside those hours",
      lambda p: replace(p, clock_partials_per_h=(8 * 60 + 9 * 12) / DAY_HOURS)),
@@ -136,8 +136,8 @@ def main() -> None:
         print(f"  {days(current):5.1f} days  {per_day:6.1f} mAh/day  {name}")
     print()
 
-    light = STEPS[2][1](STEPS[1][1](p))
-    print("Alternatives (vs. light sleep + audio off, "
+    light = STEPS[1][1](p)
+    print("Alternatives (vs. light sleep, "
           f"{days(light):.1f} days):")
     for name, change in ALTERNATIVES:
         print(f"  {days(change(light)):5.1f} days  {name}")

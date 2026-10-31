@@ -19,6 +19,7 @@
 #include "driver/rtc_io.h"
 #include "esp_attr.h"
 #include "esp_log.h"
+#include "esp_pm.h"
 #include "esp_sleep.h"
 #include "esp_sntp.h"
 #include "esp_timer.h"
@@ -111,6 +112,21 @@ public:
         }
         panel_.SetEpd(epd_);
 
+        // Automatic light sleep: between events the CPU sleeps and Wi-Fi
+        // stays associated, waking for its beacons. Buttons wake it via
+        // GPIO (see ZectrixBoard). While the USB serial port is connected
+        // to a computer, ESP-IDF holds the CPU awake so logging and
+        // flashing keep working (CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION).
+        esp_pm_config_t pm = {};
+        pm.max_freq_mhz = 160;
+        pm.min_freq_mhz = 40;
+        pm.light_sleep_enable = true;
+        err = esp_pm_configure(&pm);
+        if (err != ESP_OK) {
+            ESP_LOGW(kTag, "power management unavailable: %s",
+                     esp_err_to_name(err));
+        }
+
         // Waking from the overnight sleep: an hourly alarm (or its backup
         // timer) refreshes the night screen and sleeps again; the OK button
         // or the 05:00 alarm returns to the screens. No splash either way.
@@ -168,6 +184,9 @@ private:
     static constexpr int64_t kSlowRefreshUs = 15LL * 60 * 1000 * 1000;
     // Commute boards are refetched this often while that screen is shown.
     static constexpr int64_t kCommuteRefreshUs = 2LL * 60 * 1000 * 1000;
+    // The commute screen returns to the dashboard after this long without
+    // a button press.
+    static constexpr int64_t kCommuteTimeoutUs = 15LL * 60 * 1000 * 1000;
     // The weekend outlook changes slowly.
     static constexpr int64_t kOutlookRefreshUs = 60LL * 60 * 1000 * 1000;
     // "Coming up" turns a page this often.
@@ -195,6 +214,12 @@ private:
             if (now_us - last_slow_fetch_us_ >= kSlowRefreshUs &&
                 FetchWeatherAndEvents()) {
                 // Weather and picks sit in gray areas on every screen.
+                ShowScreen();
+            }
+
+            if (screen_ == Screen::kCommute &&
+                now_us - last_input_us_ >= kCommuteTimeoutUs) {
+                screen_ = Screen::kDashboard;
                 ShowScreen();
             }
 
@@ -532,6 +557,8 @@ private:
         esp_sleep_enable_timer_wakeup(
             static_cast<uint64_t>(sleep_s + 10 * 60) * 1000000ULL);
 
+        // GPIO wakeup is for light sleep only; deep sleep uses ext1 above.
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
         // Keep the battery latch (and other held pins) on while asleep.
         gpio_deep_sleep_hold_en();
         ESP_LOGI(kTag, "night sleep for %lld s",
@@ -554,6 +581,7 @@ private:
         vTaskDelay(pdMS_TO_TICKS(100));
         board_.CutBatteryPower();
         vTaskDelay(pdMS_TO_TICKS(100));
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
         esp_deep_sleep_start();
     }
 

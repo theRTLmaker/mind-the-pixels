@@ -28,7 +28,23 @@ constexpr char kRdmQuery[] =
 constexpr char kHuxleyUrl[] =
     "https://huxley2.azurewebsites.net/departures/SFA/to/STP/3";
 constexpr size_t kResponseCapacity = 32768;
-constexpr TickType_t kRefreshInterval = pdMS_TO_TICKS(60000);
+// Every minute in the commuting hours, every 5 minutes otherwise (each
+// fetch is a TLS request, a large share of the battery once the CPU
+// light-sleeps).
+constexpr TickType_t kPeakRefreshInterval = pdMS_TO_TICKS(60 * 1000);
+constexpr TickType_t kOffPeakRefreshInterval = pdMS_TO_TICKS(5 * 60 * 1000);
+
+TickType_t RefreshInterval() {
+    const time_t now = time(nullptr);
+    if (now < 1700000000) {
+        return kPeakRefreshInterval;
+    }
+    struct tm local_time = {};
+    localtime_r(&now, &local_time);
+    const int hour = local_time.tm_hour;
+    const bool peak = (hour >= 6 && hour < 10) || (hour >= 16 && hour < 20);
+    return peak ? kPeakRefreshInterval : kOffPeakRefreshInterval;
+}
 
 zectrix_trains_data_t latest_data = {};
 SemaphoreHandle_t data_mutex = nullptr;
@@ -234,7 +250,7 @@ void TrainRefreshTask(void *) {
             xSemaphoreGive(data_mutex);
         }
 
-        vTaskDelay(kRefreshInterval);
+        vTaskDelay(RefreshInterval());
     }
 }
 }  // namespace

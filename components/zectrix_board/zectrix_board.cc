@@ -9,6 +9,7 @@
 #include "es8311_audio_codec.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "esp_timer.h"
 #include "freertos/task.h"
 #include "rtc_pcf8563.h"
@@ -48,6 +49,23 @@ TickType_t LongPressTicks(ZectrixButton button) {
 bool ClickOnPress(ZectrixButton button) {
     return button == ZectrixButton::kUp ||
            button == ZectrixButton::kDown;
+}
+
+// While no button is down the button task sleeps until a press, so the
+// CPU can enter automatic light sleep. A press is a low level on the pin:
+// it wakes the chip (GPIO wakeup) and fires this level interrupt, which
+// switches the button interrupts off again and wakes the task to debounce.
+TaskHandle_t button_task_handle = nullptr;
+
+void ButtonIsr(void*) {
+    for (const ButtonDefinition& definition : kButtons) {
+        gpio_intr_disable(definition.gpio);
+    }
+    BaseType_t woken = pdFALSE;
+    if (button_task_handle != nullptr) {
+        vTaskNotifyGiveFromISR(button_task_handle, &woken);
+    }
+    portYIELD_FROM_ISR(woken);
 }
 
 }  // namespace
@@ -176,6 +194,19 @@ esp_err_t ZectrixBoard::Init() {
         button_task_ = nullptr;
         return ESP_ERR_NO_MEM;
     }
+    button_task_handle = button_task_;
+
+    err = gpio_install_isr_service(0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        return err;
+    }
+    for (const ButtonDefinition& definition : kButtons) {
+        gpio_set_intr_type(definition.gpio, GPIO_INTR_LOW_LEVEL);
+        gpio_isr_handler_add(definition.gpio, ButtonIsr, nullptr);
+        gpio_intr_disable(definition.gpio);
+        gpio_wakeup_enable(definition.gpio, GPIO_INTR_LOW_LEVEL);
+    }
+    esp_sleep_enable_gpio_wakeup();
 
     InitBatteryAdc();
     const int64_t now_ms = esp_timer_get_time() / 1000;
@@ -268,6 +299,25 @@ void ZectrixBoard::ButtonTask() {
                         definition.button, ZectrixButtonAction::kLongPress};
                     xQueueSend(button_queue_, &event, 0);
                 }
+            }
+        }
+
+        // All buttons up and settled: sleep until the next press instead of
+        // polling, so the CPU can light-sleep. Enabling the low-level
+        // interrupts with a button already down fires them at once.
+        bool idle = true;
+        for (const ButtonState& state : states) {
+            idle = idle && state.armed && state.stable_level == 1 &&
+                   state.sampled_level == 1;
+        }
+        if (idle) {
+            for (const ButtonDefinition& definition : kButtons) {
+                gpio_intr_enable(definition.gpio);
+            }
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            const TickType_t woke = xTaskGetTickCount();
+            for (ButtonState& state : states) {
+                state.sampled_at = woke;
             }
         }
         vTaskDelay(kButtonPoll);

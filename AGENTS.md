@@ -83,7 +83,7 @@ Intended public repository name: `mind-the-pixels`.
   (menuconfig, gitignored `sdkconfig`; never print or commit it), falling
   back to
   `https://huxley2.azurewebsites.net/departures/SFA/to/STP/3`. Refreshed
-  every 60 s, cached on failure.
+  every minute 06-10 and 16-20, every 5 min otherwise; cached on failure.
 - `components/zectrix_dashboard_events/`: fetches `events.json` from
   `CONFIG_ZECTRIX_EVENTS_URL` (a secret gist, gitignored `sdkconfig`) with
   the weather every 15 min and keeps up to four `screen` lines. The file is
@@ -114,6 +114,20 @@ the PCF8563, fetches weather and picks (last good copies live in
 `RTC_DATA_ATTR` globals) and sleeps again. OK (GPIO0) wakes back into
 the last screen (kept in RTC memory); the 05:00 wake does too. Deep sleep drops the
 USB serial port, so flashing during the night needs a button wake first.
+
+## Power
+
+- Automatic light sleep (`esp_pm_configure` in `app_main.cc`,
+  `CONFIG_PM_ENABLE`, tickless idle). `CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION`
+  keeps the CPU awake while USB serial is connected to a computer, so
+  logs and flashing work on the Mac; light sleep is only exercised on
+  battery or a plain charger.
+- Buttons are interrupt driven (`ZectrixBoard::ButtonTask`): low-level GPIO
+  interrupts + GPIO light-sleep wakeup while idle, 20 ms polling only while
+  a button is down. Deep sleep disables the GPIO wake source first.
+- The "audio" rail (GPIO42) also powers the I2C bus; `I2cDevice` forces it
+  on for every transfer. Don't switch it off to save power.
+- `tools/power_model.py`: estimated budget; calibrate with a USB power meter.
 
 ## Working style
 

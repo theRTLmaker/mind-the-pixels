@@ -48,13 +48,18 @@ splash, then the dashboard.
 | Bottom | "Coming up": four curated London picks (exhibitions, jazz, classical, theatre deals, markets) with FREE/DEAL/BOOK tags | An `events.json` you publish (e.g. a secret gist), see [Events](#events) |
 
 The weather and events are fetched at start and every 15 minutes after
-that; trains refresh in the background every 60 seconds and keep the last
+that; trains refresh in the background every minute from 06:00 to 10:00
+and 16:00 to 20:00 (every 5 minutes otherwise) and keep the last
 good data if a refresh fails. The dashboard is drawn with a 16-gray full
 refresh; the clock and train card update with black-and-white partial
 refreshes.
 
 A battery icon sits beside the clock on every screen (a bolt while
-charging). From 22:00 to 05:00, after 10 minutes without a button press,
+charging). While awake the board uses automatic light sleep: the CPU
+sleeps between events and buttons wake it (it stays awake while plugged
+into a computer, so logging and flashing work). The commute screen returns
+to the dashboard after 15 minutes without a button press.
+`tools/power_model.py` estimates battery life and compares optimisations. From 22:00 to 05:00, after 10 minutes without a button press,
 the board switches to a night screen (weather, picks, battery) and
 deep-sleeps, waking once an hour on the board's RTC alarm to refresh the
 weather; press OK to bring the screens back for 10 minutes. At 05:00 it
