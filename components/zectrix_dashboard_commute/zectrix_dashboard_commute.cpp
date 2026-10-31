@@ -124,7 +124,7 @@ bool FetchBoard(const char* from, const char* filter, const char* targets,
                 int rows, std::vector<Leg>* legs) {
     char query[96];
     snprintf(query, sizeof(query),
-             "numRows=%d&filterCRS=%s&filterType=to&timeWindow=180", rows,
+             "numRows=%d&filterCRS=%s&filterType=to&timeWindow=150", rows,
              filter);
     char* body = zectrix_rdm_board_json(from, query);
     if (body == nullptr) {
@@ -154,16 +154,20 @@ zectrix_dashboard_commute_fetch(zectrix_commute_data_t* out) {
     std::vector<Leg> second;
     bool ok = true;
     if (outbound) {
+        // Thameslink and Great Northern boards are ~16 KB per train with
+        // details, so ask for only as many as the connections need.
         ok &= FetchBoard("SFA", "STP", "STP", 6, &first);
-        ok &= FetchBoard("STP", "CBG", "CBG", 10, &second);
-        ok &= FetchBoard("KGX", "CBG", "CBG", 10, &second);
+        ok &= FetchBoard("STP", "CBG", "CBG", 6, &second);
+        ok &= FetchBoard("KGX", "CBG", "CBG", 8, &second);
     } else {
         ok &= FetchBoard("CBG", "STP", "STP", 6, &first);
         ok &= FetchBoard("CBG", "KGX", "KGX", 6, &first);
         ok &= FetchBoard("STP", "SFA", "SFA", 10, &second);
     }
     if (!ok) {
-        ESP_LOGW(kTag, "A commute board request failed");
+        ESP_LOGW(kTag, "A commute board request failed (%d + %d legs so far)",
+                 static_cast<int>(first.size()),
+                 static_cast<int>(second.size()));
         return ESP_FAIL;
     }
 

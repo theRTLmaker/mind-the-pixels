@@ -257,8 +257,9 @@ extern "C" char *zectrix_rdm_board_json(const char *crs, const char *query) {
     if (written <= 0 || static_cast<size_t>(written) >= sizeof(url)) {
         return nullptr;
     }
-    // Boards with details list every calling point; leave plenty of room.
-    return zectrix_http_get(url, kRdmApiKey, 65536);
+    // Boards with details list every calling point and coach: a King's
+    // Cross board of 8 trains is ~130 KB. The buffer lands in PSRAM.
+    return zectrix_http_get(url, kRdmApiKey, 256 * 1024);
 }
 
 extern "C" esp_err_t zectrix_dashboard_trains_start(void) {
