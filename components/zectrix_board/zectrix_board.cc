@@ -189,13 +189,8 @@ esp_err_t ZectrixBoard::Init() {
     if (button_queue_ == nullptr) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(ButtonTaskEntry, "zectrix_buttons", 3072, this, 5,
-                    &button_task_) != pdPASS) {
-        button_task_ = nullptr;
-        return ESP_ERR_NO_MEM;
-    }
-    button_task_handle = button_task_;
-
+    // Set up the press interrupts (disabled) before the task starts: the
+    // task enables them whenever it goes idle.
     err = gpio_install_isr_service(0);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         return err;
@@ -205,8 +200,15 @@ esp_err_t ZectrixBoard::Init() {
         gpio_isr_handler_add(definition.gpio, ButtonIsr, nullptr);
         gpio_intr_disable(definition.gpio);
         gpio_wakeup_enable(definition.gpio, GPIO_INTR_LOW_LEVEL);
+        gpio_intr_disable(definition.gpio);
     }
     esp_sleep_enable_gpio_wakeup();
+
+    if (xTaskCreate(ButtonTaskEntry, "zectrix_buttons", 3072, this, 5,
+                    &button_task_) != pdPASS) {
+        button_task_ = nullptr;
+        return ESP_ERR_NO_MEM;
+    }
 
     InitBatteryAdc();
     const int64_t now_ms = esp_timer_get_time() / 1000;
@@ -244,6 +246,8 @@ void ZectrixBoard::ButtonTaskEntry(void* arg) {
 }
 
 void ZectrixBoard::ButtonTask() {
+    // Before any interrupt can fire: they are enabled only below.
+    button_task_handle = xTaskGetCurrentTaskHandle();
     std::array<ButtonState, kButtons.size()> states = {};
     const TickType_t start = xTaskGetTickCount();
     for (size_t i = 0; i < kButtons.size(); ++i) {
