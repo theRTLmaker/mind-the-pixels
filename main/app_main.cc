@@ -1,9 +1,10 @@
 // Mind the Pixels: a personal London dashboard for the ZECTRIX NOTE4.
 //
-// Three screens, switched with UP/DOWN: the dashboard (weather, trains to
-// St Pancras, curated picks), the full "Coming up" list, and Margarida's
-// commute to Cambridge. OK refreshes the current screen; holding DOWN
-// switches the board off. From 22:00 to 05:00 the board shows a night
+// Four screens, switched with UP/DOWN: the dashboard (weather, trains to
+// St Pancras, curated picks), the full "Coming up" list (pages turn every
+// minute, or with OK), the coming weekend (forecast, picks, daylight, air)
+// and Margarida's commute to Cambridge. OK refreshes the other screens;
+// holding DOWN switches the board off. From 22:00 to 05:00 the board shows a night
 // screen and deep-sleeps, waking hourly to refresh the weather.
 
 #include <sys/time.h>
@@ -28,6 +29,7 @@
 #include "zectrix_board_config.h"
 #include "zectrix_dashboard_commute.h"
 #include "zectrix_dashboard_events.h"
+#include "zectrix_dashboard_outlook.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_view.h"
 #include "zectrix_dashboard_weather.h"
@@ -42,6 +44,7 @@ constexpr char kTag[] = "mind_the_pixels";
 enum class Screen : int {
     kDashboard = 0,
     kEvents,
+    kWeekend,
     kCommute,
     kCount,
 };
@@ -165,6 +168,10 @@ private:
     static constexpr int64_t kSlowRefreshUs = 15LL * 60 * 1000 * 1000;
     // Commute boards are refetched this often while that screen is shown.
     static constexpr int64_t kCommuteRefreshUs = 2LL * 60 * 1000 * 1000;
+    // The weekend outlook changes slowly.
+    static constexpr int64_t kOutlookRefreshUs = 60LL * 60 * 1000 * 1000;
+    // "Coming up" turns a page this often.
+    static constexpr int64_t kEventsPageUs = 60LL * 1000 * 1000;
 
     // Overnight deep sleep from kNightStartHour to kNightEndHour local
     // time, once no button has been pressed for kNightAwakeUs.
@@ -193,6 +200,9 @@ private:
 
             if (screen_ == Screen::kDashboard) {
                 UpdateDashboardTrains();
+            } else if (screen_ == Screen::kEvents &&
+                       now_us - last_page_us_ >= kEventsPageUs) {
+                TurnEventsPage();
             } else if (screen_ == Screen::kCommute &&
                        now_us - last_commute_fetch_us_ >= kCommuteRefreshUs &&
                        FetchCommute()) {
@@ -242,9 +252,16 @@ private:
             index = (index + 1) % kCount;
         } else if (event.button == ZectrixButton::kUp) {
             index = (index + kCount - 1) % kCount;
+        } else if (screen_ == Screen::kEvents) {
+            TurnEventsPage();
+            return;
         } else {
             // OK: refresh the current screen with fresh commute times.
             last_commute_fetch_us_ = INT64_MIN / 2;
+        }
+        if (static_cast<Screen>(index) != screen_) {
+            events_page_ = 0;
+            last_page_us_ = esp_timer_get_time();
         }
         screen_ = static_cast<Screen>(index);
         ShowScreen();
@@ -263,7 +280,12 @@ private:
                 break;
             case Screen::kEvents:
                 ZectrixDashboardDrawEventsFull(canvas, events, &battery_,
-                                               clock_text_);
+                                               clock_text_, events_page_);
+                break;
+            case Screen::kWeekend:
+                ZectrixDashboardDrawWeekend(
+                    canvas, outlook_ok_ ? &outlook_ : nullptr, events,
+                    &battery_, clock_text_);
                 break;
             case Screen::kCommute:
                 ZectrixDashboardDrawCommute(canvas, weather,
@@ -284,6 +306,12 @@ private:
                    esp_timer_get_time() - last_commute_fetch_us_ >=
                        kCommuteRefreshUs) {
             FetchCommute();
+        } else if (screen_ == Screen::kWeekend && !outlook_ok_) {
+            // The boot fetch can run before the clock has synced.
+            outlook_ok_ = zectrix_dashboard_outlook_fetch(&outlook_) == ESP_OK;
+            if (outlook_ok_) {
+                last_outlook_fetch_us_ = esp_timer_get_time();
+            }
         }
         DrawScreen();
         const esp_err_t err = panel_.RefreshFullGray();
@@ -308,6 +336,7 @@ private:
                 RefreshPartial(kDashboardClockRefreshRect);
                 break;
             case Screen::kEvents:
+            case Screen::kWeekend:
                 DrawScreen();
                 RefreshPartial(kEventsClockRefreshRect);
                 break;
@@ -318,6 +347,20 @@ private:
             case Screen::kCount:
                 break;
         }
+    }
+
+    // Next page of "Coming up" (wrapping), as a partial refresh: the view
+    // is black and white.
+    void TurnEventsPage() {
+        last_page_us_ = esp_timer_get_time();
+        const int pages =
+            ZectrixDashboardEventsPageCount(events_ok_ ? &events_ : nullptr);
+        if (pages <= 1) {
+            return;
+        }
+        events_page_ = (events_page_ + 1) % pages;
+        DrawScreen();
+        RefreshPartial(kEventsPageRefreshRect);
     }
 
     // The train card redraws on any change, including failures while
@@ -353,6 +396,18 @@ private:
             events_ = events;
             events_ok_ = true;
             changed = true;
+        }
+        if (last_slow_fetch_us_ - last_outlook_fetch_us_ >= kOutlookRefreshUs) {
+            zectrix_outlook_data_t outlook = {};
+            if (zectrix_dashboard_outlook_fetch(&outlook) == ESP_OK) {
+                last_outlook_fetch_us_ = last_slow_fetch_us_;
+                if (!outlook_ok_ ||
+                    std::memcmp(&outlook, &outlook_, sizeof(outlook)) != 0) {
+                    outlook_ = outlook;
+                    outlook_ok_ = true;
+                    changed = true;
+                }
+            }
         }
         return changed;
     }
@@ -512,6 +567,9 @@ private:
     zectrix_events_data_t events_ = {};
     bool events_ok_ = false;
     zectrix_trains_data_t displayed_trains_ = {};
+    zectrix_outlook_data_t outlook_ = {};
+    bool outlook_ok_ = false;
+    int events_page_ = 0;
     zectrix_commute_data_t commute_ = {};
     bool commute_ok_ = false;
     ZectrixDashboardBattery battery_ = {};
@@ -521,6 +579,8 @@ private:
     int64_t last_input_us_ = 0;
     int64_t last_slow_fetch_us_ = 0;
     int64_t last_commute_fetch_us_ = INT64_MIN / 2;
+    int64_t last_outlook_fetch_us_ = INT64_MIN / 2;
+    int64_t last_page_us_ = 0;
 };
 
 }  // namespace

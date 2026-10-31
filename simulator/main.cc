@@ -69,12 +69,17 @@ bool Render(const Scenario& scenario, const std::string& out_dir, int scale) {
     static ZectrixCanvas canvas;
     if (std::strcmp(scenario.name, "splash") == 0) {
         ZectrixDashboardDrawSplash(canvas, "Connecting to Wi-Fi...");
+    } else if (std::strcmp(scenario.name, "weekend") == 0) {
+        ZectrixDashboardDrawWeekend(canvas, &kOutlook, scenario.events,
+                                    &scenario.battery, scenario.clock);
     } else if (std::strcmp(scenario.name, "commute") == 0) {
         ZectrixDashboardDrawCommute(canvas, &scenario.weather, &kCommuteAm,
                                     &scenario.battery, scenario.clock);
-    } else if (std::strcmp(scenario.name, "events-full") == 0) {
-        ZectrixDashboardDrawEventsFull(canvas, scenario.events,
-                                       &scenario.battery, scenario.clock);
+    } else if (std::strncmp(scenario.name, "events-", 7) == 0 &&
+               std::strcmp(scenario.name, "events-long") != 0) {
+        ZectrixDashboardDrawEventsFull(
+            canvas, scenario.events, &scenario.battery, scenario.clock,
+            std::strcmp(scenario.name, "events-page2") == 0 ? 1 : 0);
     } else if (scenario.night) {
         ZectrixDashboardDrawNight(
             canvas, scenario.weather_ok ? &scenario.weather : nullptr,

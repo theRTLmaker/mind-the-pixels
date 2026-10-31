@@ -137,6 +137,20 @@ zectrix_dashboard_events_fetch(zectrix_events_data_t *out) {
         }
     }
 
+    const cJSON *weekend = cJSON_GetObjectItemCaseSensitive(root, "weekend");
+    cJSON_ArrayForEach(line, weekend) {
+        if (parsed.weekend_count >= ZECTRIX_EVENT_WEEKEND_LINES) {
+            break;
+        }
+        zectrix_event_line_t &entry = parsed.weekend[parsed.weekend_count];
+        CopyString(line, "when", entry.when, sizeof(entry.when));
+        CopyString(line, "text", entry.text, sizeof(entry.text));
+        CopyString(line, "tag", entry.tag, sizeof(entry.tag));
+        if (entry.text[0] != '\0') {
+            ++parsed.weekend_count;
+        }
+    }
+
     // Items for the full-screen view, best first as curated.
     const cJSON *items = cJSON_GetObjectItemCaseSensitive(root, "items");
     const cJSON *item = nullptr;
@@ -166,7 +180,7 @@ zectrix_dashboard_events_fetch(zectrix_events_data_t *out) {
 
     parsed.valid = parsed.count > 0;
     *out = parsed;
-    ESP_LOGI(kTag, "Loaded %d event lines, %d items", parsed.count,
-             parsed.item_count);
+    ESP_LOGI(kTag, "Loaded %d event lines, %d items, %d weekend",
+             parsed.count, parsed.item_count, parsed.weekend_count);
     return parsed.valid ? ESP_OK : ESP_FAIL;
 }

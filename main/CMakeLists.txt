@@ -9,4 +9,5 @@ idf_component_register(SRCS "app_main.cc"
                        zectrix_dashboard_trains
                        zectrix_dashboard_events
                        zectrix_dashboard_commute
+                       zectrix_dashboard_outlook
                        zectrix_dashboard_view)

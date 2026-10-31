@@ -18,7 +18,8 @@ typedef struct {
     char tag[8];  // "", "FREE", "DEAL" or "BOOK"
 } zectrix_event_line_t;
 
-#define ZECTRIX_EVENT_ITEMS 6
+#define ZECTRIX_EVENT_ITEMS 12
+#define ZECTRIX_EVENT_WEEKEND_LINES 4
 
 // One entry of events.json "items", for the full-screen events view.
 typedef struct {
@@ -34,6 +35,9 @@ typedef struct {
     int count;
     zectrix_event_item_t items[ZECTRIX_EVENT_ITEMS];
     int item_count;
+    // events.json "weekend": picks for the coming Saturday and Sunday.
+    zectrix_event_line_t weekend[ZECTRIX_EVENT_WEEKEND_LINES];
+    int weekend_count;
     bool valid;
 } zectrix_events_data_t;
 

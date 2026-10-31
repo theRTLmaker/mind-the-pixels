@@ -9,6 +9,7 @@
 
 #include "zectrix_dashboard_commute.h"
 #include "zectrix_dashboard_events.h"
+#include "zectrix_dashboard_outlook.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_view.h"
 #include "zectrix_dashboard_weather.h"
@@ -156,9 +157,21 @@ inline const zectrix_events_data_t kFullPicks = [] {
         Item("Fri 6 Nov", "Sinfonia of London & Benjamin Grosvenor",
              "Barbican", "", "BOOK"),
         Item("13-22 Nov", "EFG London Jazz Festival",
-             "Southbank Centre and 70+ venues", "From \u00a3" "5", "BOOK")};
+             "Southbank Centre and 70+ venues", "From \u00a3" "5", "BOOK"),
+        Item("Wed 11 Nov, 18:30", "LSO: Steve Reich at 90 (Half Six Fix)",
+             "Barbican", "\u00a3" "15"),
+        Item("Fri 27 Nov, 19:30", "Sir Andras Schiff, piano recital",
+             "Wigmore Hall", "", "BOOK")};
     for (const zectrix_event_item_t& item : items) {
         data.items[data.item_count++] = item;
+    }
+    const zectrix_event_line_t weekend[] = {
+        Pick("Sat 10:00", "Columbia Road + Broadway Market"),
+        Pick("Sat 19:30", "Fado night, Bar Douro", "BOOK"),
+        Pick("Sun 11:30", "Wigmore Hall Sunday morning"),
+        Pick("Sun 14:00", "Free jazz, Rolling Stock E2", "FREE")};
+    for (const zectrix_event_line_t& line : weekend) {
+        data.weekend[data.weekend_count++] = line;
     }
     return data;
 }();
@@ -204,6 +217,21 @@ inline const zectrix_commute_data_t kCommuteAm = [] {
     return c;
 }();
 
+inline const zectrix_outlook_data_t kOutlook = [] {
+    zectrix_outlook_data_t o = {};
+    o.days[0] = {"Sat 7 Nov", 2, 13.6f, 9.4f, 13, 12.0f};
+    o.days[1] = {"Sun 8 Nov", 61, 12.2f, 8.4f, 70, 24.0f};
+    o.day_count = 2;
+    std::snprintf(o.sunrise, 6, "06:53");
+    std::snprintf(o.sunset, 6, "16:33");
+    o.daylight_minutes = 580;
+    o.moon_phase = 0.62f;
+    o.aqi = 50;
+    o.pollen = 0;
+    o.valid = true;
+    return o;
+}();
+
 inline const std::vector<Scenario>& Scenarios() {
     static const std::vector<Scenario> scenarios = {
         {"sunny", "Clear sky, trains on time", true,
@@ -242,8 +270,12 @@ inline const std::vector<Scenario>& Scenarios() {
         {"splash", "Boot screen", true, {}, kLoading, "--:--"},
         {"commute", "Margarida to Cambridge (illustrative times)", true,
          Weather(61, 9.7f, 7.2f, 7, 11, 90, 93, 24), kLoading, "07:12"},
-        {"events-full", "Full-screen Coming up", true, {}, kLoading, "18:40",
-         &kFullPicks},
+        {"events-full", "Full-screen Coming up, page 1", true, {}, kLoading,
+         "18:40", &kFullPicks},
+        {"weekend", "This weekend: forecast, picks, daylight and air", true,
+         {}, kLoading, "18:45", &kFullPicks},
+        {"events-page2", "Full-screen Coming up, page 2", true, {}, kLoading,
+         "18:41", &kFullPicks},
         {"offline", "No Wi-Fi: weather failed, trains still loading", false,
          {}, kLoading, "--:--"},
     };

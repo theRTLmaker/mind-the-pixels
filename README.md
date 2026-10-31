@@ -20,13 +20,17 @@ font. See [Credits and licence](#credits-and-licence).
 
 ## Screens
 
-UP and DOWN switch between three screens; OK refreshes the current one and
-holding DOWN switches the board off. The board boots on a "Mind the Pixels"
+UP and DOWN switch between four screens; OK refreshes the current one (on
+"Coming up" it turns the page) and holding DOWN switches the board off. The board boots on a "Mind the Pixels"
 splash, then the dashboard.
 
 1. **Dashboard**: weather, clock, trains to St Pancras and four picks (below).
-2. **Coming up**: the curated picks full screen, with when, price and venue.
-3. **Commute**: Margarida's journey between Stratford International and
+2. **Coming up**: up to 12 curated picks, six per page, with when, price and
+   venue; pages turn every minute with a quick black-and-white refresh.
+3. **This weekend**: Saturday and Sunday forecasts, weekend picks, and
+   today's sunrise, sunset, moon phase, air quality and pollen
+   ([Open-Meteo](https://open-meteo.com/) forecast and air-quality APIs).
+4. **Commute**: Margarida's journey between Stratford International and
    Cambridge, changing at St Pancras (Thameslink) or King's Cross (Great
    Northern). Before 14:00 it shows the way there, after that the way home:
    up to four connections with live times (inverted when they differ from
@@ -121,7 +125,9 @@ secret gist. Minimal format:
 ```
 
 Up to four lines; `tag` is empty or a short word drawn inverted on the
-right. Text is ASCII plus "£"; anything too long is cut with "...".
+right. Optional `weekend` (same shape, up to four lines) feeds the weekend
+screen, and `items` (up to 12, with `title`, `when`, `venue`, `price`,
+`deal`, `book_now`) feeds the full-screen "Coming up". Text is ASCII plus "£"; anything too long is cut with "...".
 
 ## Mac simulator
 
@@ -155,6 +161,8 @@ components/zectrix_dashboard_weather/ Open-Meteo client
 components/zectrix_dashboard_trains/  Departure board client and background refresh
 components/zectrix_dashboard_events/  Curated events.json client
 components/zectrix_dashboard_commute/ Stratford <-> Cambridge connections
+components/zectrix_dashboard_outlook/ Weekend forecast, daylight, air and pollen
+components/zectrix_http/            Shared HTTPS GET helper
 components/zectrix_demo_ui/         Canvas, bitmap font, panel refresh  (upstream, trimmed)
 components/zectrix_epd/             SSD2683 display driver              (upstream)
 components/zectrix_board/           Board pins and peripherals          (upstream)

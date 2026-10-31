@@ -8,6 +8,7 @@
 #include "zectrix_canvas.h"
 #include "zectrix_dashboard_commute.h"
 #include "zectrix_dashboard_events.h"
+#include "zectrix_dashboard_outlook.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_weather.h"
 
@@ -32,9 +33,12 @@ inline constexpr ZectrixDashboardRect kDashboardTrainsRefreshRect = {
     248, 32, 152, 120};
 inline constexpr ZectrixDashboardRect kDashboardClockRefreshRect = {
     248, 0, 152, 32};
-// Clock and battery on the full-screen events view.
+// Clock and battery on the full-screen events view, and the whole view for
+// page turns (it has no gray).
 inline constexpr ZectrixDashboardRect kEventsClockRefreshRect = {
     296, 0, 104, 28};
+inline constexpr ZectrixDashboardRect kEventsPageRefreshRect = {
+    0, 0, 400, 300};
 // Commute view: header (title, update time, weather, clock, battery) and
 // the journey rows; both black and white so they can update partially.
 inline constexpr ZectrixDashboardRect kCommuteHeaderRefreshRect = {
@@ -69,17 +73,30 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
 // Clock in the top-right corner. Clears its own area; text such as "10:42".
 void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text,
                                const ZectrixDashboardBattery* battery);
-// Full-screen "Coming up": the curated items with when, venue and price.
+// Full-screen "Coming up": the curated items with when, price and venue,
+// kEventsPerPage per page (page is 0-based). Black and white only, so pages
+// turn with a partial refresh of kEventsPageRefreshRect.
+inline constexpr int kEventsPerPage = 6;
+int ZectrixDashboardEventsPageCount(const zectrix_events_data_t* events);
 void ZectrixDashboardDrawEventsFull(ZectrixCanvas& canvas,
                                     const zectrix_events_data_t* events,
                                     const ZectrixDashboardBattery* battery,
-                                    const char* clock_text);
+                                    const char* clock_text, int page);
 
 // Margarida's commute: Stratford Intl <-> London <-> Cambridge connections
 // with live and timetable times, plus a weather line.
 void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
                                  const zectrix_weather_data_t* weather,
                                  const zectrix_commute_data_t* commute,
+                                 const ZectrixDashboardBattery* battery,
+                                 const char* clock_text);
+
+// The coming weekend: Saturday and Sunday weather, weekend picks, and
+// today's daylight, moon, air quality and pollen. The clock window is
+// kEventsClockRefreshRect, as on the events view.
+void ZectrixDashboardDrawWeekend(ZectrixCanvas& canvas,
+                                 const zectrix_outlook_data_t* outlook,
+                                 const zectrix_events_data_t* events,
                                  const ZectrixDashboardBattery* battery,
                                  const char* clock_text);
 

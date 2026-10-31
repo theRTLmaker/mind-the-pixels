@@ -7,12 +7,11 @@
 
 #include "cJSON.h"
 #include "sdkconfig.h"
-#include "esp_crt_bundle.h"
-#include "esp_http_client.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "zectrix_http.h"
 
 namespace {
 constexpr char kTag[] = "dashboard_trains";
@@ -31,35 +30,9 @@ constexpr char kHuxleyUrl[] =
 constexpr size_t kResponseCapacity = 32768;
 constexpr TickType_t kRefreshInterval = pdMS_TO_TICKS(60000);
 
-struct ResponseBuffer {
-    char *data;
-    size_t length;
-    size_t capacity;
-};
-
 zectrix_trains_data_t latest_data = {};
 SemaphoreHandle_t data_mutex = nullptr;
 bool task_started = false;
-
-esp_err_t HttpEventHandler(esp_http_client_event_t *event) {
-    auto *response = static_cast<ResponseBuffer *>(event->user_data);
-
-    if (event->event_id != HTTP_EVENT_ON_DATA ||
-        response == nullptr || event->data_len <= 0) {
-        return ESP_OK;
-    }
-
-    const size_t incoming = static_cast<size_t>(event->data_len);
-    if (response->length + incoming >= response->capacity) {
-        ESP_LOGE(kTag, "Train response is too large");
-        return ESP_FAIL;
-    }
-
-    memcpy(response->data + response->length, event->data, incoming);
-    response->length += incoming;
-    response->data[response->length] = '\0';
-    return ESP_OK;
-}
 
 const cJSON *GetField(const cJSON *object, const char *name) {
     return cJSON_GetObjectItemCaseSensitive(object, name);
@@ -92,52 +65,9 @@ bool CopyTime(const cJSON *value, char out[6]) {
     return true;
 }
 
-// GETs url (with an optional x-apikey header) into a malloc'd,
-// NUL-terminated body of at most capacity bytes; nullptr on any failure.
-char *HttpGet(const char *url, const char *api_key, size_t capacity) {
-    char *body = static_cast<char *>(malloc(capacity));
-    if (body == nullptr) {
-        ESP_LOGE(kTag, "Out of memory for response");
-        return nullptr;
-    }
-    body[0] = '\0';
-
-    ResponseBuffer response = {body, 0, capacity};
-
-    esp_http_client_config_t config = {};
-    config.url = url;
-    config.method = HTTP_METHOD_GET;
-    config.timeout_ms = 10000;
-    config.event_handler = HttpEventHandler;
-    config.user_data = &response;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if (client == nullptr) {
-        free(body);
-        return nullptr;
-    }
-
-    if (api_key != nullptr && api_key[0] != '\0') {
-        esp_http_client_set_header(client, "x-apikey", api_key);
-    }
-
-    const esp_err_t err = esp_http_client_perform(client);
-    const int status = esp_http_client_get_status_code(client);
-    esp_http_client_cleanup(client);
-
-    if (err != ESP_OK || status != 200 || response.length == 0) {
-        ESP_LOGW(kTag, "Train request failed: %s, HTTP %d",
-                 esp_err_to_name(err), status);
-        free(body);
-        return nullptr;
-    }
-    return body;
-}
-
 bool FetchTrainsFrom(const char *url, const char *api_key,
                      zectrix_trains_data_t *result) {
-    char *body = HttpGet(url, api_key, kResponseCapacity);
+    char *body = zectrix_http_get(url, api_key, kResponseCapacity);
     if (body == nullptr) {
         return false;
     }
@@ -328,7 +258,7 @@ extern "C" char *zectrix_rdm_board_json(const char *crs, const char *query) {
         return nullptr;
     }
     // Boards with details list every calling point; leave plenty of room.
-    return HttpGet(url, kRdmApiKey, 65536);
+    return zectrix_http_get(url, kRdmApiKey, 65536);
 }
 
 extern "C" esp_err_t zectrix_dashboard_trains_start(void) {

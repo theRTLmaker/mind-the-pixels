@@ -44,8 +44,9 @@ Intended public repository name: `mind-the-pixels`.
 ## Architecture
 
 - `main/app_main.cc`: the `MindThePixels` app. Boot splash, Wi-Fi, then
-  three screens (Dashboard, Coming up, Commute) switched with UP/DOWN; OK
-  refreshes, long DOWN shuts down. `Loop()` refetches weather/events every
+  four screens (Dashboard, Coming up, This weekend, Commute) switched with
+  UP/DOWN; OK refreshes (turns the page on Coming up, which also pages
+  every 60 s), long DOWN shuts down. `Loop()` refetches weather/events every
   15 min (full gray redraw on change), updates the dashboard train card and
   the commute header/rows (every 2 min) with partials, the clock each
   minute, and enters night sleep. The upstream demo menu, gallery, assets
@@ -58,6 +59,12 @@ Intended public repository name: `mind-the-pixels`.
   canvas, TRMNL16 bitmap text, ASCII plus "£") and `zectrix_panel.*`
   (`ZectrixPanel`: 1bpp/gray full refresh and 1bpp partials over a gray
   base).
+- `components/zectrix_dashboard_outlook/`: Open-Meteo 8-day forecast
+  (picks the coming Saturday/Sunday) plus air quality and pollen, and the
+  moon phase computed locally; fetched at most hourly.
+- `components/zectrix_http/`: shared `zectrix_http_get()` used by the
+  trains, commute and outlook data (weather and events still have their
+  own small clients).
 - `components/zectrix_dashboard_commute/`: Margarida's commute. Before
   14:00 SFA->STP plus STP/KGX->CBG boards, after that CBG->STP/KGX plus
   STP->SFA, via `zectrix_rdm_board_json()` from the trains component;
@@ -89,9 +96,10 @@ Intended public repository name: `mind-the-pixels`.
 Dashboard layout: weather (8, 8, 232×140), clock top-right centred on
 x=312 with the battery icon at (366, 12) in the same partial window, trains
 (248, 34, 144×114), events (8, 158, 384×132). Other screens and their
-partial windows (`kEventsClockRefreshRect`, `kCommuteHeaderRefreshRect`,
-`kCommuteRowsRefreshRect`) are in the view header; the commute header and
-rows are pure black and white for that reason.
+partial windows (`kEventsClockRefreshRect`, also used by the weekend view,
+`kEventsPageRefreshRect`, `kCommuteHeaderRefreshRect`,
+`kCommuteRowsRefreshRect`) are in the view header; the events view and the
+commute header and rows are pure black and white for that reason.
 
 Night mode (`main/app_main.cc`): from 22:00 to 05:00, after 10 minutes
 without a button press on any screen, the board draws the night screen
