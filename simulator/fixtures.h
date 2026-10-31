@@ -9,6 +9,7 @@
 
 #include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_trains.h"
+#include "zectrix_dashboard_view.h"
 #include "zectrix_dashboard_weather.h"
 
 struct Scenario {
@@ -19,6 +20,8 @@ struct Scenario {
     zectrix_trains_data_t trains;
     const char* clock;
     const zectrix_events_data_t* events = nullptr;
+    ZectrixDashboardBattery battery = {true, 72, false, false};
+    bool night = false;
 };
 
 inline zectrix_weather_data_t Weather(int code, float temp, float feels,
@@ -151,9 +154,11 @@ inline const std::vector<Scenario>& Scenarios() {
         {"snow", "Weather code 71", true,
          Weather(71, -1.5f, -5.8f, -3, 1, 70, 88, 16), kOnTime, "08:04", &kPicks},
         {"storm", "Weather code 95", true,
-         Weather(95, 14.9f, 13.0f, 12, 17, 100, 85, 41), kMixed, "19:20", &kPicks},
+         Weather(95, 14.9f, 13.0f, 12, 17, 100, 85, 41), kMixed, "19:20", &kPicks,
+         {true, 8, false, false}},
         {"late-night", "Only one departure left", true,
-         Weather(1, 7.0f, 5.5f, 5, 12, 0, 77, 6), kOneTrain, "23:30", &kPicks},
+         Weather(1, 7.0f, 5.5f, 5, 12, 0, 77, 6), kOneTrain, "23:30", &kPicks,
+         {true, 55, true, false}},
         {"trains-stale", "Train fetches failing for 7 min, cached times", true,
          Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kStale, "09:58", &kPicks},
         {"trains-unavailable", "Trains never loaded, still retrying", true,
@@ -161,6 +166,9 @@ inline const std::vector<Scenario>& Scenarios() {
         {"events-long", "Long picks are cut with ... before the tag", true,
          Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "18:05",
          &kLongPicks},
+        {"night", "22:00-05:00 screen, weather refreshed hourly", true,
+         Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "02:00",
+         &kPicks, {true, 64, false, false}, true},
         {"offline", "No Wi-Fi: weather failed, trains still loading", false,
          {}, kLoading, "--:--"},
     };

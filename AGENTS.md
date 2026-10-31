@@ -75,8 +75,19 @@ Intended public repository name: `mind-the-pixels`.
   `host_include/` stand-ins for `esp_err.h` and the SPI/GPIO driver headers,
   fixtures in `fixtures.h`, PNG output in `simulator/out/`.
 
-Layout today: weather (8, 8, 232×140), clock top-right centred on x=320,
-trains (248, 34, 144×114), events (8, 158, 384×132).
+Layout today: weather (8, 8, 232×140), clock top-right centred on x=312
+with the battery icon at (366, 12) in the same partial window, trains
+(248, 34, 144×114), events (8, 158, 384×132).
+
+Night mode (`main/app_main.cc`): from 22:00 to 05:00, once the dashboard
+has been open 10 minutes, the board draws the night screen
+(`ZectrixDashboardDrawNight`: weather, picks, battery) and deep-sleeps to
+the next full hour. The PCF8563 (set to UTC) alarm on RTC_INT wakes it, with
+an RC-timer backup 10 minutes later; each night wake restores the time from
+the PCF8563, fetches weather and picks (last good copies live in
+`RTC_DATA_ATTR` globals) and sleeps again. OK (GPIO0) wakes into the
+dashboard; the 05:00 wake goes to the dashboard too. Deep sleep drops the
+USB serial port, so flashing during the night needs a button wake first.
 
 ## Working style
 

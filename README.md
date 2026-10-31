@@ -32,6 +32,11 @@ good data if a refresh fails. The dashboard is drawn with a 16-gray full
 refresh; the clock and train card update with black-and-white partial
 refreshes.
 
+A battery icon sits beside the clock (a bolt while charging). From 22:00 to
+05:00 the dashboard switches to a night screen (weather, picks, battery)
+and deep-sleeps, waking once an hour on the board's RTC alarm to refresh
+the weather; press OK to bring the full dashboard back for 10 minutes.
+
 The upstream demo's menu is still available: Dashboard, Auto Showcase,
 Display Gallery, Hardware Tests, Device Info and About & License.
 

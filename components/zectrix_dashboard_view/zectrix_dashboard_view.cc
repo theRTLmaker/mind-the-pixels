@@ -573,23 +573,90 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
     }
 }
 
-void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text) {
-    // Clock above the train card, centred in the right column.
-    canvas.FillRect(248, 0, 144, 32, false);
-    const int clock_x = 320 - canvas.TextWidth(text, 2) / 2;
+namespace {
+
+// Battery outline with a level bar; a lightning bolt while charging.
+// Black and white only: it shares the clock's partial-refresh window.
+void DrawBattery(ZectrixCanvas& canvas, int x, int y,
+                 const ZectrixDashboardBattery& battery) {
+    constexpr int kWidth = 20;
+    constexpr int kHeight = 11;
+    canvas.Rect(x, y, kWidth, kHeight, true);
+    canvas.FillRect(x + kWidth, y + 3, 2, kHeight - 6, true);
+
+    if (battery.charging && !battery.full) {
+        // Bolt: two strokes meeting in the middle, drawn twice for weight.
+        for (int dx = 0; dx < 2; ++dx) {
+            canvas.Line(x + 11 + dx, y + 2, x + 8 + dx, y + 5, true);
+            canvas.Line(x + 8 + dx, y + 5, x + 12 + dx, y + 5, true);
+            canvas.Line(x + 12 + dx, y + 5, x + 9 + dx, y + 8, true);
+        }
+        return;
+    }
+
+    const int percent =
+        battery.full ? 100 : std::clamp(battery.percent, 0, 100);
+    const int inner = kWidth - 4;
+    // Never fully empty while valid, so a low battery still shows a sliver.
+    const int fill = std::max(1, (inner * percent + 50) / 100);
+    canvas.FillRect(x + 2, y + 2, fill, kHeight - 4, true);
+}
+
+}  // namespace
+
+void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text,
+                               const ZectrixDashboardBattery* battery) {
+    // Clock above the train card, centred in the right column, with the
+    // battery icon at the right edge.
+    canvas.FillRect(248, 0, 152, 32, false);
+    const int clock_x = 312 - canvas.TextWidth(text, 2) / 2;
     canvas.Text(clock_x, 4, text, 2);
+    if (battery != nullptr && battery->valid) {
+        DrawBattery(canvas, 366, 12, *battery);
+    }
+}
+
+void ZectrixDashboardDrawNight(ZectrixCanvas& canvas,
+                               const zectrix_weather_data_t* weather,
+                               const zectrix_events_data_t* events,
+                               const ZectrixDashboardBattery* battery,
+                               const char* wake_text,
+                               const char* updated_text) {
+    canvas.Clear();
+    ZectrixDashboardDrawWeather(canvas, weather, HourFromClock(updated_text));
+    ZectrixDashboardDrawEvents(canvas, events);
+
+    // Right column instead of clock and trains: the panel only changes
+    // once an hour at night, so no clock.
+    canvas.Text(256, 8, "Good night");
+    if (battery != nullptr && battery->valid) {
+        DrawBattery(canvas, 366, 12, *battery);
+    }
+    canvas.Line(256, 30, 384, 30);
+    TextGray(canvas, 256, 40, wake_text, kLabel);
+    TextGray(canvas, 256, 62, "OK to wake now", kLabel);
+    if (updated_text != nullptr && updated_text[0] != '\0') {
+        char updated[24];
+        std::snprintf(updated, sizeof(updated), "Updated %s", updated_text);
+        TextGray(canvas, 384 - canvas.TextWidth(updated), 130, updated,
+                 kLabel);
+    }
+
+    canvas.FillRectGray(243, 12, 1, 136, kRule);
+    canvas.FillRectGray(12, 156, 376, 1, kRule);
 }
 
 void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
                              const zectrix_weather_data_t* weather,
                              const zectrix_trains_data_t& trains,
                              const zectrix_events_data_t* events,
+                             const ZectrixDashboardBattery* battery,
                              const char* clock_text) {
     canvas.Clear();
     ZectrixDashboardDrawWeather(canvas, weather, HourFromClock(clock_text));
     ZectrixDashboardDrawTrains(canvas, trains);
     ZectrixDashboardDrawEvents(canvas, events);
-    ZectrixDashboardDrawClock(canvas, clock_text);
+    ZectrixDashboardDrawClock(canvas, clock_text, battery);
 
     // Hairlines instead of boxes, kept outside the partial-refresh windows.
     canvas.FillRectGray(243, 12, 1, 136, kRule);

@@ -14,11 +14,16 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include <sys/time.h>
+#include "driver/rtc_io.h"
+#include "esp_attr.h"
 #include "esp_sleep.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "zectrix_board.h"
+#include "zectrix_board_config.h"
+#include "rtc_pcf8563.h"
 #include "zectrix_demo_ui.h"
 #include "zectrix_epd.h"
 #include "zectrix_self_test.h"
@@ -73,6 +78,29 @@ uint16_t ReadLe16(const uint8_t* data) {
            static_cast<uint16_t>(data[1] << 8);
 }
 
+// Last good weather and picks, kept in RTC memory across the overnight
+// deep sleeps so a failed hourly fetch leaves the night screen unchanged.
+RTC_DATA_ATTR zectrix_weather_data_t g_night_weather;
+RTC_DATA_ATTR bool g_night_weather_ok;
+RTC_DATA_ATTR zectrix_events_data_t g_night_events;
+RTC_DATA_ATTR bool g_night_events_ok;
+
+// UTC calendar time to time_t without touching TZ (days-from-civil).
+time_t UtcToTime(const tm& utc) {
+    int year = utc.tm_year + 1900;
+    const int month = utc.tm_mon + 1;
+    year -= month <= 2 ? 1 : 0;
+    const int era = (year >= 0 ? year : year - 399) / 400;
+    const int year_of_era = year - era * 400;
+    const int day_of_year =
+        (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + utc.tm_mday - 1;
+    const int day_of_era = year_of_era * 365 + year_of_era / 4 -
+                           year_of_era / 100 + day_of_year;
+    const int64_t days = era * 146097LL + day_of_era - 719468;
+    return static_cast<time_t>(days * 86400 + utc.tm_hour * 3600 +
+                               utc.tm_min * 60 + utc.tm_sec);
+}
+
 static void StartDashboardClockSync() {
     static bool started = false;
 
@@ -107,13 +135,51 @@ public:
             return;
         }
         ui_.SetEpd(epd_);
-        ESP_ERROR_CHECK(ui_.ShowSplash());
-        Wait(pdMS_TO_TICKS(1500), false);
+
+        // Waking from the overnight sleep: an hourly alarm (or its backup
+        // timer) refreshes the night screen and sleeps again; the OK button
+        // or the 05:00 alarm goes straight to the dashboard. No splash.
+        const esp_sleep_wakeup_cause_t wake = esp_sleep_get_wakeup_cause();
+        const bool night_wake = wake == ESP_SLEEP_WAKEUP_EXT1 ||
+                                wake == ESP_SLEEP_WAKEUP_TIMER;
+        bool button_wake = false;
+        if (night_wake) {
+            button_wake = wake == ESP_SLEEP_WAKEUP_EXT1 &&
+                          (esp_sleep_get_ext1_wakeup_status() &
+                           (1ULL << ZECTRIX_BUTTON_OK)) != 0;
+            RestoreTimeFromRtc();
+            if (board_.rtc() != nullptr) {
+                board_.rtc()->DisableAlarm();
+                board_.rtc()->ClearAlarmFlag();
+            }
+            ESP_LOGI(kTag, "woke from night sleep (cause %d)",
+                     static_cast<int>(wake));
+        } else {
+            ESP_ERROR_CHECK(ui_.ShowSplash());
+            Wait(pdMS_TO_TICKS(1500), false);
+        }
 
         const esp_err_t wifi_err = zectrix_dashboard_wifi_connect();
         if (wifi_err != ESP_OK) {
             ESP_LOGW(kTag, "Dashboard Wi-Fi unavailable: %s",
                      esp_err_to_name(wifi_err));
+        }
+
+        if (night_wake) {
+            StartDashboardClockSync();
+            const time_t now = time(nullptr);
+            tm local_time = {};
+            localtime_r(&now, &local_time);
+            if (!button_wake && now >= 1700000000 && IsNight(local_time)) {
+                NightRefresh();
+            }
+            // Ignore the release of the OK press that woke the board.
+            board_.DrainButtons();
+            const ControlResult result = RunDashboard();
+            ui_.EndGrayMode();
+            if (result == ControlResult::kShutdown) {
+                Shutdown();
+            }
         }
 
         while (true) {
@@ -363,8 +429,28 @@ private:
     static constexpr int64_t kDashboardWeatherRefreshUs =
         15LL * 60 * 1000 * 1000;
 
+    // Overnight deep sleep: from kNightStartHour to kNightEndHour local
+    // time. After a wake (OK button) or opening the dashboard at night, it
+    // stays on for kNightAwakeUs before sleeping again.
+    static constexpr int kNightStartHour = 22;
+    static constexpr int kNightEndHour = 5;
+    static constexpr int64_t kNightAwakeUs = 10LL * 60 * 1000 * 1000;
+
+    static bool IsNight(const tm& local_time) {
+        return local_time.tm_hour >= kNightStartHour ||
+               local_time.tm_hour < kNightEndHour;
+    }
+
+    ZectrixDashboardBattery ReadDashboardBattery() {
+        const ZectrixPowerSnapshot power = board_.ReadPowerSnapshot();
+        return {power.battery_valid, power.battery_percent,
+                power.charge.charging, power.charge.full};
+    }
+
     ControlResult RunDashboard() {
         ZectrixCanvas& canvas = ui_.canvas();
+        const int64_t dashboard_started_us = esp_timer_get_time();
+        ZectrixDashboardBattery battery = ReadDashboardBattery();
 
         zectrix_weather_data_t weather = {};
         bool weather_ok = zectrix_dashboard_weather_fetch(&weather) == ESP_OK;
@@ -385,7 +471,8 @@ private:
         char clock_text[8] = "--:--";
         ZectrixDashboardDrawAll(canvas, weather_ok ? &weather : nullptr,
                                 displayed_trains,
-                                events_ok ? &events : nullptr, clock_text);
+                                events_ok ? &events : nullptr, &battery,
+                                clock_text);
 
         // 16-gray frame; the clock and train card then use partial
         // refreshes on top of it (experimental, see zectrix_epd.h).
@@ -426,7 +513,7 @@ private:
                     ZectrixDashboardDrawAll(
                         canvas, weather_ok ? &weather : nullptr,
                         displayed_trains, events_ok ? &events : nullptr,
-                        clock_text);
+                        &battery, clock_text);
                     ESP_ERROR_CHECK(ui_.RefreshFullGray());
                 }
             }
@@ -479,12 +566,23 @@ private:
             struct tm local_time = {};
             localtime_r(&now, &local_time);
 
-            // Refresh only when the displayed minute changes.
+            if (IsNight(local_time) &&
+                esp_timer_get_time() - dashboard_started_us >= kNightAwakeUs) {
+                g_night_weather = weather;
+                g_night_weather_ok = weather_ok;
+                g_night_events = events;
+                g_night_events_ok = events_ok;
+                NightSleep(now);
+            }
+
+            // Refresh only when the displayed minute changes; the battery
+            // icon shares the clock's partial-refresh window.
             if (local_time.tm_min != last_displayed_minute) {
                 std::snprintf(clock_text, sizeof(clock_text), "%02d:%02d",
                             local_time.tm_hour, local_time.tm_min);
 
-                ZectrixDashboardDrawClock(canvas, clock_text);
+                battery = ReadDashboardBattery();
+                ZectrixDashboardDrawClock(canvas, clock_text, &battery);
 
                 const zectrix_epd_rect_t clock_rect = {
                     kDashboardClockRefreshRect.x,
@@ -669,6 +767,110 @@ private:
             board_.nfc() != nullptr, mac, flash_bytes / (1024 * 1024),
             psram_bytes / (1024 * 1024)));
         return Wait(portMAX_DELAY, false);
+    }
+
+    // The PCF8563 keeps crystal time (UTC) across deep sleep; the ESP32's
+    // own RC clock can drift by minutes overnight.
+    void RestoreTimeFromRtc() {
+        RtcPcf8563* rtc = board_.rtc();
+        tm utc = {};
+        if (rtc == nullptr || !rtc->GetTime(utc)) {
+            return;
+        }
+        const time_t now = UtcToTime(utc);
+        if (now < 1700000000) {
+            return;
+        }
+        const timeval tv = {now, 0};
+        settimeofday(&tv, nullptr);
+    }
+
+    // Hourly night wake: fetch the weather and picks (keeping the last good
+    // ones on failure), redraw the night screen and sleep again.
+    [[noreturn]] void NightRefresh() {
+        zectrix_weather_data_t weather = {};
+        if (zectrix_dashboard_weather_fetch(&weather) == ESP_OK) {
+            g_night_weather = weather;
+            g_night_weather_ok = true;
+        }
+        zectrix_events_data_t events = {};
+        if (zectrix_dashboard_events_fetch(&events) == ESP_OK) {
+            g_night_events = events;
+            g_night_events_ok = true;
+        }
+        NightSleep(time(nullptr));
+    }
+
+    // Draws the night screen (weather, picks, battery) and deep-sleeps
+    // until the next full hour, or the end of the night. The PCF8563 alarm
+    // (crystal, accurate) wakes the board on RTC_INT; a backup timer on the
+    // RC clock follows 10 minutes later; the OK button wakes it any time.
+    [[noreturn]] void NightSleep(time_t now) {
+        tm end_local = {};
+        localtime_r(&now, &end_local);
+        if (end_local.tm_hour >= kNightEndHour) {
+            ++end_local.tm_mday;
+        }
+        end_local.tm_hour = kNightEndHour;
+        end_local.tm_min = 0;
+        end_local.tm_sec = 0;
+        end_local.tm_isdst = -1;
+        const time_t night_end = mktime(&end_local);
+        const time_t next_hour = now - now % 3600 + 3600;
+        const time_t wake_at = std::min(next_hour, night_end);
+        const int64_t sleep_s = std::max<int64_t>(60, wake_at - now);
+
+        tm local_now = {};
+        localtime_r(&now, &local_now);
+        char updated[8];
+        std::snprintf(updated, sizeof(updated), "%02d:%02d",
+                      local_now.tm_hour, local_now.tm_min);
+        char wake_text[24];
+        std::snprintf(wake_text, sizeof(wake_text), "Back at %02d:00",
+                      kNightEndHour);
+        const ZectrixDashboardBattery battery = ReadDashboardBattery();
+        ZectrixDashboardDrawNight(
+            ui_.canvas(), g_night_weather_ok ? &g_night_weather : nullptr,
+            g_night_events_ok ? &g_night_events : nullptr, &battery,
+            wake_text, updated);
+        const esp_err_t refresh = ui_.RefreshFullGray();
+        if (refresh != ESP_OK) {
+            ESP_LOGW(kTag, "night screen refresh failed: %s",
+                     esp_err_to_name(refresh));
+        }
+        zectrix_epd_power_off(epd_);
+        board_.SetPowerLed(false);
+        board_.SetAudioPower(false);
+
+        // The PCF8563 runs in UTC so the alarm ignores daylight saving.
+        uint64_t wake_pins = 1ULL << ZECTRIX_BUTTON_OK;
+        RtcPcf8563* rtc = board_.rtc();
+        if (rtc != nullptr) {
+            tm utc_now = {};
+            tm utc_wake = {};
+            gmtime_r(&now, &utc_now);
+            gmtime_r(&wake_at, &utc_wake);
+            if (rtc->SetTime(utc_now) && rtc->SetAlarm(utc_wake)) {
+                wake_pins |= 1ULL << ZECTRIX_RTC_INT;
+                rtc_gpio_pullup_en(ZECTRIX_RTC_INT);
+                rtc_gpio_pulldown_dis(ZECTRIX_RTC_INT);
+            } else {
+                ESP_LOGW(kTag, "RTC alarm unavailable; using the timer only");
+            }
+        }
+        rtc_gpio_pullup_en(ZECTRIX_BUTTON_OK);
+        rtc_gpio_pulldown_dis(ZECTRIX_BUTTON_OK);
+        // RTC pull-ups only hold while the RTC peripherals stay powered.
+        esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+        esp_sleep_enable_ext1_wakeup(wake_pins, ESP_EXT1_WAKEUP_ANY_LOW);
+        esp_sleep_enable_timer_wakeup(
+            static_cast<uint64_t>(sleep_s + 10 * 60) * 1000000ULL);
+
+        // Keep the battery latch (and other held pins) on while asleep.
+        gpio_deep_sleep_hold_en();
+        ESP_LOGI(kTag, "night sleep for %lld s", static_cast<long long>(sleep_s));
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_deep_sleep_start();
     }
 
     [[noreturn]] void Shutdown() {

@@ -18,6 +18,15 @@ struct ZectrixDashboardRect {
 };
 
 // Byte-aligned partial-refresh regions covering the train card and clock.
+// Battery state for the icon beside the clock (filled from the board's
+// power snapshot in app_main; the view stays free of ESP-IDF calls).
+struct ZectrixDashboardBattery {
+    bool valid;
+    int percent;
+    bool charging;
+    bool full;
+};
+
 inline constexpr ZectrixDashboardRect kDashboardTrainsRefreshRect = {
     248, 32, 152, 120};
 inline constexpr ZectrixDashboardRect kDashboardClockRefreshRect = {
@@ -48,13 +57,24 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
                                    int current_hour = -1);
 
 // Clock in the top-right corner. Clears its own area; text such as "10:42".
-void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text);
+void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text,
+                               const ZectrixDashboardBattery* battery);
+// Screen left on the panel during the overnight deep sleep: weather (left),
+// night status and battery (right), picks (bottom). updated_text is the
+// local "HH:MM" of the last refresh.
+void ZectrixDashboardDrawNight(ZectrixCanvas& canvas,
+                               const zectrix_weather_data_t* weather,
+                               const zectrix_events_data_t* events,
+                               const ZectrixDashboardBattery* battery,
+                               const char* wake_text,
+                               const char* updated_text);
 
 // Clears the canvas and draws the whole dashboard.
 void ZectrixDashboardDrawAll(ZectrixCanvas& canvas,
                              const zectrix_weather_data_t* weather,
                              const zectrix_trains_data_t& trains,
                              const zectrix_events_data_t* events,
+                             const ZectrixDashboardBattery* battery,
                              const char* clock_text);
 
 #endif  // ZECTRIX_DASHBOARD_VIEW_H_

@@ -67,10 +67,17 @@ std::vector<uint8_t> ToGray4(const ZectrixCanvas& canvas, int scale) {
 
 bool Render(const Scenario& scenario, const std::string& out_dir, int scale) {
     static ZectrixCanvas canvas;
-    ZectrixDashboardDrawAll(canvas,
-                            scenario.weather_ok ? &scenario.weather : nullptr,
-                            scenario.trains, scenario.events,
-                            scenario.clock);
+    if (scenario.night) {
+        ZectrixDashboardDrawNight(
+            canvas, scenario.weather_ok ? &scenario.weather : nullptr,
+            scenario.events, &scenario.battery, "Back at 05:00",
+            scenario.clock);
+    } else {
+        ZectrixDashboardDrawAll(
+            canvas, scenario.weather_ok ? &scenario.weather : nullptr,
+            scenario.trains, scenario.events, &scenario.battery,
+            scenario.clock);
+    }
 
     const std::string base = out_dir + "/" + scenario.name;
     // name.png is the 16-gray frame; name-mono.png is the 1bpp frame used
