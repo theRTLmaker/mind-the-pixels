@@ -92,16 +92,17 @@ bool CopyTime(const cJSON *value, char out[6]) {
     return true;
 }
 
-bool FetchTrainsFrom(const char *url, const char *api_key,
-                     zectrix_trains_data_t *result) {
-    char *body = static_cast<char *>(malloc(kResponseCapacity));
+// GETs url (with an optional x-apikey header) into a malloc'd,
+// NUL-terminated body of at most capacity bytes; nullptr on any failure.
+char *HttpGet(const char *url, const char *api_key, size_t capacity) {
+    char *body = static_cast<char *>(malloc(capacity));
     if (body == nullptr) {
         ESP_LOGE(kTag, "Out of memory for response");
-        return false;
+        return nullptr;
     }
     body[0] = '\0';
 
-    ResponseBuffer response = {body, 0, kResponseCapacity};
+    ResponseBuffer response = {body, 0, capacity};
 
     esp_http_client_config_t config = {};
     config.url = url;
@@ -114,7 +115,7 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == nullptr) {
         free(body);
-        return false;
+        return nullptr;
     }
 
     if (api_key != nullptr && api_key[0] != '\0') {
@@ -129,6 +130,15 @@ bool FetchTrainsFrom(const char *url, const char *api_key,
         ESP_LOGW(kTag, "Train request failed: %s, HTTP %d",
                  esp_err_to_name(err), status);
         free(body);
+        return nullptr;
+    }
+    return body;
+}
+
+bool FetchTrainsFrom(const char *url, const char *api_key,
+                     zectrix_trains_data_t *result) {
+    char *body = HttpGet(url, api_key, kResponseCapacity);
+    if (body == nullptr) {
         return false;
     }
 
@@ -298,6 +308,28 @@ void TrainRefreshTask(void *) {
     }
 }
 }  // namespace
+
+extern "C" char *zectrix_rdm_board_json(const char *crs, const char *query) {
+    if (kRdmApiKey[0] == '\0' || crs == nullptr || query == nullptr) {
+        return nullptr;
+    }
+    const time_t now = time(nullptr);
+    if (now < 1700000000) {
+        return nullptr;
+    }
+    struct tm local_time = {};
+    localtime_r(&now, &local_time);
+    char board_time[16] = {};
+    strftime(board_time, sizeof(board_time), "%Y%m%dT%H%M%S", &local_time);
+    char url[384];
+    const int written = snprintf(url, sizeof(url), "%s/%s/%s?%s", kRdmUrl,
+                                 crs, board_time, query);
+    if (written <= 0 || static_cast<size_t>(written) >= sizeof(url)) {
+        return nullptr;
+    }
+    // Boards with details list every calling point; leave plenty of room.
+    return HttpGet(url, kRdmApiKey, 65536);
+}
 
 extern "C" esp_err_t zectrix_dashboard_trains_start(void) {
     if (task_started) {

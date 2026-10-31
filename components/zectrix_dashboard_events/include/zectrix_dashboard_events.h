@@ -18,9 +18,22 @@ typedef struct {
     char tag[8];  // "", "FREE", "DEAL" or "BOOK"
 } zectrix_event_line_t;
 
+#define ZECTRIX_EVENT_ITEMS 6
+
+// One entry of events.json "items", for the full-screen events view.
+typedef struct {
+    char when[24];
+    char title[48];
+    char venue[40];
+    char price[24];
+    char tag[8];  // derived: FREE, DEAL or BOOK
+} zectrix_event_item_t;
+
 typedef struct {
     zectrix_event_line_t lines[ZECTRIX_EVENT_LINES];
     int count;
+    zectrix_event_item_t items[ZECTRIX_EVENT_ITEMS];
+    int item_count;
     bool valid;
 } zectrix_events_data_t;
 

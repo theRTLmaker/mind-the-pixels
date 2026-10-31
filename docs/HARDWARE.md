@@ -42,4 +42,4 @@ battery is fitted.
 2. Override the EPD configuration in `main/app_main.cc` if its SPI wiring
    changed.
 3. Confirm flash size, PSRAM mode and partition layout in `sdkconfig.defaults`.
-4. Re-run every item in `docs/TEST_CRITERIA.md` on real hardware.
+4. Check the screens, partial refreshes and night sleep on real hardware.

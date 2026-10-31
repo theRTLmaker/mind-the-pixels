@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <strings.h>
 
 #include "cJSON.h"
 #include "esp_crt_bundle.h"
@@ -135,10 +136,37 @@ zectrix_dashboard_events_fetch(zectrix_events_data_t *out) {
             ++parsed.count;
         }
     }
+
+    // Items for the full-screen view, best first as curated.
+    const cJSON *items = cJSON_GetObjectItemCaseSensitive(root, "items");
+    const cJSON *item = nullptr;
+    cJSON_ArrayForEach(item, items) {
+        if (parsed.item_count >= ZECTRIX_EVENT_ITEMS) {
+            break;
+        }
+        zectrix_event_item_t &entry = parsed.items[parsed.item_count];
+        CopyString(item, "when", entry.when, sizeof(entry.when));
+        CopyString(item, "title", entry.title, sizeof(entry.title));
+        CopyString(item, "venue", entry.venue, sizeof(entry.venue));
+        CopyString(item, "price", entry.price, sizeof(entry.price));
+        const bool free = strncasecmp(entry.price, "free", 4) == 0;
+        const char *tag =
+            free ? "FREE"
+            : cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(item, "deal"))
+                ? "DEAL"
+            : cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(item, "book_now"))
+                ? "BOOK"
+                : "";
+        strncpy(entry.tag, tag, sizeof(entry.tag) - 1);
+        if (entry.title[0] != '\0') {
+            ++parsed.item_count;
+        }
+    }
     cJSON_Delete(root);
 
     parsed.valid = parsed.count > 0;
     *out = parsed;
-    ESP_LOGI(kTag, "Loaded %d event lines", parsed.count);
+    ESP_LOGI(kTag, "Loaded %d event lines, %d items", parsed.count,
+             parsed.item_count);
     return parsed.valid ? ESP_OK : ESP_FAIL;
 }

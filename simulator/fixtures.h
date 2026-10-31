@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "zectrix_dashboard_commute.h"
 #include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_view.h"
@@ -113,6 +114,18 @@ inline zectrix_event_line_t Pick(const char* when, const char* text,
     return line;
 }
 
+inline zectrix_event_item_t Item(const char* when, const char* title,
+                                 const char* venue, const char* price,
+                                 const char* tag = "") {
+    zectrix_event_item_t item = {};
+    std::snprintf(item.when, sizeof(item.when), "%s", when);
+    std::snprintf(item.title, sizeof(item.title), "%s", title);
+    std::snprintf(item.venue, sizeof(item.venue), "%s", venue);
+    std::snprintf(item.price, sizeof(item.price), "%s", price);
+    std::snprintf(item.tag, sizeof(item.tag), "%s", tag);
+    return item;
+}
+
 inline zectrix_events_data_t Picks(std::vector<zectrix_event_line_t> lines) {
     zectrix_events_data_t data = {};
     for (const zectrix_event_line_t& line : lines) {
@@ -129,10 +142,67 @@ inline const zectrix_events_data_t kPicks = Picks({
     Pick("Sat-Sun", "East Asian Market, Canary Wharf"),
     Pick("Fri 6 Nov", "Rachmaninoff 2, Barbican", "BOOK"),
     Pick("13-22 Nov", "London Jazz Festival, from \u00a3" "5", "BOOK")});
+inline const zectrix_events_data_t kFullPicks = [] {
+    zectrix_events_data_t data = kPicks;
+    const zectrix_event_item_t items[] = {
+        Item("Fri 30 Oct, 17:00", "Friday Jazz (early evening)",
+             "Oxford House, Bethnal Green", "Free", "FREE"),
+        Item("Sat 31 - Sun 1", "East Asian Market (Urban Garden Fair)",
+             "Canary Wharf", "Free entry"),
+        Item("Sun 1 Nov, 11:30", "Sunday Morning: Monkemeyer & Youn",
+             "Wigmore Hall, Marylebone", ""),
+        Item("Book by Sat 31", "Mamma Mia! / Beetlejuice autumn saver",
+             "Novello / Prince Edward", "Up to 55% off", "DEAL"),
+        Item("Fri 6 Nov", "Sinfonia of London & Benjamin Grosvenor",
+             "Barbican", "", "BOOK"),
+        Item("13-22 Nov", "EFG London Jazz Festival",
+             "Southbank Centre and 70+ venues", "From \u00a3" "5", "BOOK")};
+    for (const zectrix_event_item_t& item : items) {
+        data.items[data.item_count++] = item;
+    }
+    return data;
+}();
 inline const zectrix_events_data_t kLongPicks = Picks({
     Pick("Tonight", "Sample musical day seats \u00a3" "25, a very long venue name", "DEAL"),
     Pick("Wednesday 4 Nov", "Sample fado night with a long artist and venue name"),
     Pick("to 12 Apr", "Sample exhibition with a long title here", "BOOK")});
+
+inline zectrix_journey_t Journey(const char* d1, const char* d1x,
+                                 const char* at, const char* a1,
+                                 const char* a1x, const char* d2,
+                                 const char* d2x, const char* a2,
+                                 const char* a2x, int change) {
+    zectrix_journey_t j = {};
+    std::snprintf(j.leg1_dep, 6, "%s", d1);
+    std::snprintf(j.leg1_dep_expected, 6, "%s", d1x);
+    std::snprintf(j.change_at, 4, "%s", at);
+    std::snprintf(j.change_arr, 6, "%s", a1);
+    std::snprintf(j.change_arr_expected, 6, "%s", a1x);
+    std::snprintf(j.leg2_dep, 6, "%s", d2);
+    std::snprintf(j.leg2_dep_expected, 6, "%s", d2x);
+    std::snprintf(j.final_arr, 6, "%s", a2);
+    std::snprintf(j.final_arr_expected, 6, "%s", a2x);
+    j.change_minutes = change;
+    return j;
+}
+
+// Illustrative times only (shape of the live data, not a real timetable).
+inline const zectrix_commute_data_t kCommuteAm = [] {
+    zectrix_commute_data_t c = {};
+    c.outbound = true;
+    c.valid = true;
+    std::snprintf(c.updated, 6, "07:12");
+    c.journeys[0] = Journey("07:16", "07:16", "KGX", "07:23", "07:23",
+                            "07:44", "07:44", "08:31", "08:31", 21);
+    c.journeys[1] = Journey("07:31", "07:34", "STP", "07:38", "07:41",
+                            "07:52", "07:52", "08:51", "08:51", 11);
+    c.journeys[2] = Journey("07:46", "07:46", "KGX", "07:53", "07:53",
+                            "08:14", "08:19", "09:01", "09:06", 26);
+    c.journeys[3] = Journey("08:01", "08:01", "STP", "08:08", "08:08",
+                            "08:22", "08:22", "09:21", "09:21", 14);
+    c.count = 4;
+    return c;
+}();
 
 inline const std::vector<Scenario>& Scenarios() {
     static const std::vector<Scenario> scenarios = {
@@ -169,6 +239,11 @@ inline const std::vector<Scenario>& Scenarios() {
         {"night", "22:00-05:00 screen, weather refreshed hourly", true,
          Weather(3, 11.0f, 9.6f, 8, 12, 35, 80, 18), kOnTime, "02:00",
          &kPicks, {true, 64, false, false}, true},
+        {"splash", "Boot screen", true, {}, kLoading, "--:--"},
+        {"commute", "Margarida to Cambridge (illustrative times)", true,
+         Weather(61, 9.7f, 7.2f, 7, 11, 90, 93, 24), kLoading, "07:12"},
+        {"events-full", "Full-screen Coming up", true, {}, kLoading, "18:40",
+         &kFullPicks},
         {"offline", "No Wi-Fi: weather failed, trains still loading", false,
          {}, kLoading, "--:--"},
     };

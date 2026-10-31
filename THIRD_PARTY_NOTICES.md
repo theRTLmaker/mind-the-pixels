@@ -24,9 +24,8 @@ component in `managed_components/espressif__esp_codec_dev/LICENSE`.
 
 ## Demonstration artwork
 
-The lighthouse, snowy-path and mountain images in `main/assets` were created
-for the Zectrix hardware demonstration and are distributed with this project
-under the project MIT License by Zectrix Lab.
+The upstream lighthouse, snowy-path and mountain demo images (MIT, Zectrix
+Lab) are no longer included; they remain in the git history and upstream.
 
 ## Data sources
 

@@ -3,17 +3,10 @@ idf_component_register(SRCS "app_main.cc"
                        zectrix_board
                        zectrix_demo_ui
                        zectrix_epd
-                       zectrix_self_test
                        esp_timer
-                       heap
-                       spi_flash
                        zectrix_dashboard_wifi
                        zectrix_dashboard_weather
                        zectrix_dashboard_trains
                        zectrix_dashboard_events
-                       zectrix_dashboard_view
-                       EMBED_FILES
-                       "assets/lighthouse_400x300_1bpp.bin"
-                       "assets/snow_path_400x300_1bpp.bin"
-                       "assets/footprint_animation.bin"
-                       "assets/mountain_400x300_4bpp.bin")
+                       zectrix_dashboard_commute
+                       zectrix_dashboard_view)

@@ -67,7 +67,15 @@ std::vector<uint8_t> ToGray4(const ZectrixCanvas& canvas, int scale) {
 
 bool Render(const Scenario& scenario, const std::string& out_dir, int scale) {
     static ZectrixCanvas canvas;
-    if (scenario.night) {
+    if (std::strcmp(scenario.name, "splash") == 0) {
+        ZectrixDashboardDrawSplash(canvas, "Connecting to Wi-Fi...");
+    } else if (std::strcmp(scenario.name, "commute") == 0) {
+        ZectrixDashboardDrawCommute(canvas, &scenario.weather, &kCommuteAm,
+                                    &scenario.battery, scenario.clock);
+    } else if (std::strcmp(scenario.name, "events-full") == 0) {
+        ZectrixDashboardDrawEventsFull(canvas, scenario.events,
+                                       &scenario.battery, scenario.clock);
+    } else if (scenario.night) {
         ZectrixDashboardDrawNight(
             canvas, scenario.weather_ok ? &scenario.weather : nullptr,
             scenario.events, &scenario.battery, "Back at 05:00",

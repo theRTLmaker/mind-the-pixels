@@ -24,6 +24,8 @@ public:
     void TextCentered(int y, const char* text, int scale = 1,
                       bool inverted = false);
     int TextWidth(const char* text, int scale = 1) const;
+    // Text in a gray level (0 = black .. 15 = white), scale 1.
+    void TextGray(int x, int y, const char* text, uint8_t level);
 
     // 16-level gray, 0 = black and 15 = white. The 4bpp frame gets the exact
     // level; the 1bpp frame gets an ordered dither so it still reads as gray

@@ -160,6 +160,26 @@ void ZectrixCanvas::Text(int x, int y, const char* text, int scale,
     }
 }
 
+void ZectrixCanvas::TextGray(int x, int y, const char* text, uint8_t level) {
+    if (text == nullptr) {
+        return;
+    }
+    for (const unsigned char* cursor =
+             reinterpret_cast<const unsigned char*>(text);
+         *cursor != '\0'; ++cursor) {
+        int glyph_width = 0;
+        const uint16_t* glyph = GlyphAt(cursor, &glyph_width);
+        for (int row = 0; row < 16; ++row) {
+            for (int column = 0; column < glyph_width; ++column) {
+                if (glyph[row] & (1U << (15 - column))) {
+                    GrayPixel(x + column, y + row, level);
+                }
+            }
+        }
+        x += glyph_width;
+    }
+}
+
 void ZectrixCanvas::TextCentered(int y, const char* text, int scale,
                                  bool inverted) {
     Text((kWidth - TextWidth(text, scale)) / 2, y, text, scale, inverted);

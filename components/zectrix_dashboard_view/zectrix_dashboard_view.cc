@@ -227,24 +227,7 @@ constexpr uint8_t kRule = 6;
 // windows, which must stay pure black and white.
 void TextGray(ZectrixCanvas& canvas, int x, int y, const char* text,
               uint8_t level) {
-    for (const unsigned char* cursor =
-             reinterpret_cast<const unsigned char*>(text);
-         *cursor != '\0'; ++cursor) {
-        unsigned char code = *cursor;
-        if (code < 0x20 || code > 0x7e) {
-            code = '?';
-        }
-        const uint16_t* glyph = kZectrixAsciiFont8x16[code - 0x20];
-        const int width = kZectrixAsciiFontWidths[code - 0x20];
-        for (int row = 0; row < 16; ++row) {
-            for (int column = 0; column < width; ++column) {
-                if (glyph[row] & (1U << (15 - column))) {
-                    canvas.GrayPixel(x + column, y + row, level);
-                }
-            }
-        }
-        x += width;
-    }
+    canvas.TextGray(x, y, text, level);
 }
 
 // Degree sign: a small ring whose top-left is at (x, y).
@@ -613,6 +596,239 @@ void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text,
     canvas.Text(clock_x, 4, text, 2);
     if (battery != nullptr && battery->valid) {
         DrawBattery(canvas, 366, 12, *battery);
+    }
+}
+
+void ZectrixDashboardDrawEventsFull(ZectrixCanvas& canvas,
+                                    const zectrix_events_data_t* events,
+                                    const ZectrixDashboardBattery* battery,
+                                    const char* clock_text) {
+    canvas.Clear();
+    canvas.Text(12, 8, "Coming up");
+    TextGray(canvas, 12 + canvas.TextWidth("Coming up") + 10, 8,
+             "picked for you", kLabel);
+    if (clock_text != nullptr) {
+        canvas.Text(358 - canvas.TextWidth(clock_text), 8, clock_text);
+    }
+    if (battery != nullptr && battery->valid) {
+        DrawBattery(canvas, 366, 10, *battery);
+    }
+    canvas.FillRectGray(12, 30, 376, 1, kRule);
+
+    if (events == nullptr || events->item_count == 0) {
+        TextGray(canvas, 12, 44, "No picks yet", kLabel);
+        return;
+    }
+
+    // Two lines per pick: when + title (tag on the right), then venue and
+    // price in gray.
+    for (int i = 0; i < events->item_count && i < ZECTRIX_EVENT_ITEMS; ++i) {
+        const zectrix_event_item_t& item = events->items[i];
+        const int y = 38 + i * 44;
+
+        int title_right = 388;
+        if (item.tag[0] != '\0') {
+            const int tag_width = canvas.TextWidth(item.tag) + 6;
+            canvas.FillRect(388 - tag_width, y, tag_width, 16, true);
+            canvas.Text(388 - tag_width + 3, y, item.tag, 1, true);
+            title_right = 388 - tag_width - 6;
+        }
+        char title[48];
+        FitText(canvas, item.title, title_right - 12, title, sizeof(title));
+        canvas.Text(12, y, title);
+
+        char detail[96];
+        if (item.price[0] != '\0') {
+            std::snprintf(detail, sizeof(detail), "%s  -  %s  -  %s",
+                          item.when, item.price, item.venue);
+        } else {
+            std::snprintf(detail, sizeof(detail), "%s  -  %s", item.when,
+                          item.venue);
+        }
+        char fitted[96];
+        FitText(canvas, detail, 376, fitted, sizeof(fitted));
+        TextGray(canvas, 12, y + 20, fitted, kLabel);
+        if (i + 1 < events->item_count && i + 1 < ZECTRIX_EVENT_ITEMS) {
+            canvas.FillRectGray(12, y + 41, 376, 1, kRule);
+        }
+    }
+}
+
+namespace {
+
+// Side view of a high-speed train on a rail, about 54 x 22 pixels.
+void DrawTrainIcon(ZectrixCanvas& canvas, int x, int y) {
+    canvas.FillRect(x, y, 42, 16, true);
+    for (int row = 0; row < 16; ++row) {
+        // Sloped nose, longest at the bottom.
+        canvas.FillRect(x + 42, y + row, 2 + row * 8 / 15, 1, true);
+    }
+    for (int window = 0; window < 4; ++window) {
+        canvas.FillRect(x + 4 + window * 9, y + 4, 6, 5, false);
+    }
+    canvas.FillRect(x + 43, y + 4, 3, 4, false);
+    canvas.FillRect(x, y + 11, 50, 1, false);
+    canvas.FillRect(x + 4, y + 17, 10, 3, true);
+    canvas.FillRect(x + 30, y + 17, 10, 3, true);
+    canvas.FillRect(x - 2, y + 21, 56, 1, true);
+}
+
+const char* WeatherWord(int code) {
+    if (code == 0) return "Clear";
+    if (code <= 2) return "Partly cloudy";
+    if (code == 3) return "Overcast";
+    if (code == 45 || code == 48) return "Fog";
+    if (code >= 51 && code <= 57) return "Drizzle";
+    if (code >= 61 && code <= 67) return "Rain";
+    if (code >= 71 && code <= 77) return "Snow";
+    if (code >= 80 && code <= 82) return "Showers";
+    if (code >= 95) return "Thunder";
+    return "";
+}
+
+const char* StationName(const char* crs) {
+    if (std::strcmp(crs, "KGX") == 0) return "King's Cross";
+    if (std::strcmp(crs, "STP") == 0) return "St Pancras";
+    return crs;
+}
+
+// "07:31" -> "07h31", like the train card.
+void ShortTime(const char* time, char out[6]) {
+    std::snprintf(out, 6, "%c%ch%c%c", time[0], time[1], time[3], time[4]);
+}
+
+// A live time; inverted when it differs from the timetable.
+int DrawLiveTime(ZectrixCanvas& canvas, int x, int y, const char* timetable,
+                 const char* live) {
+    char text[6];
+    ShortTime(live, text);
+    const bool late = std::strcmp(timetable, live) != 0;
+    if (late) {
+        canvas.FillRect(x - 2, y, canvas.TextWidth(text) + 4, 16, true);
+    }
+    canvas.Text(x, y, text, 1, late);
+    return canvas.TextWidth(text);
+}
+
+}  // namespace
+
+void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
+                                 const zectrix_weather_data_t* weather,
+                                 const zectrix_commute_data_t* commute,
+                                 const ZectrixDashboardBattery* battery,
+                                 const char* clock_text) {
+    canvas.Clear();
+    const bool outbound = commute == nullptr || commute->outbound;
+
+    DrawTrainIcon(canvas, 12, 6);
+    canvas.Text(76, 4, outbound ? "To Cambridge" : "Home from Cambridge");
+    if (commute != nullptr && commute->valid) {
+        char updated[32];
+        std::snprintf(updated, sizeof(updated), "Live times, updated %s",
+                      commute->updated);
+        canvas.Text(76, 24, updated);
+    }
+    if (clock_text != nullptr) {
+        canvas.Text(358 - canvas.TextWidth(clock_text), 4, clock_text);
+    }
+    if (battery != nullptr && battery->valid) {
+        DrawBattery(canvas, 366, 6, *battery);
+    }
+    // Black and white from here down to the rows: the header and rows
+    // update with partial refreshes as live times change.
+    if (weather != nullptr) {
+        char temp[8];
+        std::snprintf(temp, sizeof(temp), "%.0f", weather->temperature_c);
+        const char* word = WeatherWord(weather->weather_code);
+        const int width = canvas.TextWidth(temp) + 12 + canvas.TextWidth(word);
+        const int x = 388 - width;
+        canvas.Text(x, 24, temp);
+        DrawDegree(canvas, x + canvas.TextWidth(temp) + 1, 26, 2, 1, 0);
+        canvas.Text(x + canvas.TextWidth(temp) + 12, 24, word);
+    }
+    canvas.FillRectGray(12, 46, 376, 1, kRule);
+
+    const char* from = outbound ? "Stratford" : "Cambridge";
+    const char* to = outbound ? "Cambridge" : "Stratford";
+    TextGray(canvas, 12, 52, from, kLabel);
+    TextGray(canvas, 92, 52, "London", kLabel);
+    TextGray(canvas, 186, 52, "Change", kLabel);
+    TextGray(canvas, 304, 52, to, kLabel);
+
+    if (commute == nullptr || !commute->valid) {
+        canvas.Text(12, 82, "No connections right now");
+        return;
+    }
+
+    for (int i = 0; i < commute->count && i < ZECTRIX_COMMUTE_JOURNEYS; ++i) {
+        const zectrix_journey_t& j = commute->journeys[i];
+        const int y = 76 + i * 56;
+
+        DrawLiveTime(canvas, 12, y, j.leg1_dep, j.leg1_dep_expected);
+        canvas.Text(62, y, "->");
+        DrawLiveTime(canvas, 92, y, j.change_arr, j.change_arr_expected);
+        const int x = 186 + DrawLiveTime(canvas, 186, y, j.leg2_dep,
+                                         j.leg2_dep_expected);
+        canvas.Text(x + 6, y, j.change_at);
+        canvas.Text(276, y, "->");
+        DrawLiveTime(canvas, 304, y, j.final_arr, j.final_arr_expected);
+
+        const bool on_time =
+            std::strcmp(j.leg1_dep, j.leg1_dep_expected) == 0 &&
+            std::strcmp(j.change_arr, j.change_arr_expected) == 0 &&
+            std::strcmp(j.leg2_dep, j.leg2_dep_expected) == 0 &&
+            std::strcmp(j.final_arr, j.final_arr_expected) == 0;
+        char detail[96];
+        if (on_time) {
+            std::snprintf(detail, sizeof(detail),
+                          "On time  -  %d min to change at %s",
+                          j.change_minutes, StationName(j.change_at));
+        } else {
+            char a[6], b[6], c[6], d[6];
+            ShortTime(j.leg1_dep, a);
+            ShortTime(j.change_arr, b);
+            ShortTime(j.leg2_dep, c);
+            ShortTime(j.final_arr, d);
+            std::snprintf(detail, sizeof(detail),
+                          "Timetable %s>%s %s>%s (%d min)", a, b, c, d,
+                          j.change_minutes);
+        }
+        char fitted[96];
+        FitText(canvas, detail, 376, fitted, sizeof(fitted));
+        canvas.Text(12, y + 20, fitted);
+        if (i + 1 < commute->count) {
+            for (int x = 12; x < 388; x += 3) {
+                canvas.Pixel(x, y + 46, true);
+            }
+        }
+    }
+}
+
+void ZectrixDashboardDrawSplash(ZectrixCanvas& canvas, const char* status) {
+    canvas.Clear();
+    canvas.TextCentered(58, "MIND THE PIXELS", 2);
+    const char* subtitle = "a personal London dashboard";
+    TextGray(canvas, (ZectrixCanvas::kWidth - canvas.TextWidth(subtitle)) / 2,
+             100, subtitle, kLabel);
+
+    // Platform edge: the coping stone, the dashed warning line, then the
+    // platform surface with tactile paving, all the way across the panel.
+    canvas.FillRect(0, 160, ZectrixCanvas::kWidth, 4, true);
+    for (int x = 4; x < ZectrixCanvas::kWidth; x += 20) {
+        canvas.FillRect(x, 172, 12, 3, true);
+    }
+    canvas.FillRectGray(0, 184, ZectrixCanvas::kWidth, 44, 11);
+    for (int y = 188; y < 206; y += 6) {
+        for (int x = 2 + ((y / 6) % 2) * 3; x < ZectrixCanvas::kWidth;
+             x += 6) {
+            canvas.FillRectGray(x, y, 2, 2, 4);
+        }
+    }
+
+    if (status != nullptr && status[0] != '\0') {
+        TextGray(canvas,
+                 (ZectrixCanvas::kWidth - canvas.TextWidth(status)) / 2, 252,
+                 status, kLabel);
     }
 }
 

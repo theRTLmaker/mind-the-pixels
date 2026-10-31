@@ -6,6 +6,7 @@
 // runtime calls (networking, FreeRTOS, display refresh) so it builds on a host.
 
 #include "zectrix_canvas.h"
+#include "zectrix_dashboard_commute.h"
 #include "zectrix_dashboard_events.h"
 #include "zectrix_dashboard_trains.h"
 #include "zectrix_dashboard_weather.h"
@@ -31,6 +32,15 @@ inline constexpr ZectrixDashboardRect kDashboardTrainsRefreshRect = {
     248, 32, 152, 120};
 inline constexpr ZectrixDashboardRect kDashboardClockRefreshRect = {
     248, 0, 152, 32};
+// Clock and battery on the full-screen events view.
+inline constexpr ZectrixDashboardRect kEventsClockRefreshRect = {
+    296, 0, 104, 28};
+// Commute view: header (title, update time, weather, clock, battery) and
+// the journey rows; both black and white so they can update partially.
+inline constexpr ZectrixDashboardRect kCommuteHeaderRefreshRect = {
+    72, 0, 328, 44};
+inline constexpr ZectrixDashboardRect kCommuteRowsRefreshRect = {
+    0, 72, 400, 228};
 
 // Weather area. Pass nullptr when the weather fetch failed. On days with
 // rain the hourly chart replaces humidity and wind; hours before
@@ -59,6 +69,24 @@ void ZectrixDashboardDrawRainChart(ZectrixCanvas& canvas,
 // Clock in the top-right corner. Clears its own area; text such as "10:42".
 void ZectrixDashboardDrawClock(ZectrixCanvas& canvas, const char* text,
                                const ZectrixDashboardBattery* battery);
+// Full-screen "Coming up": the curated items with when, venue and price.
+void ZectrixDashboardDrawEventsFull(ZectrixCanvas& canvas,
+                                    const zectrix_events_data_t* events,
+                                    const ZectrixDashboardBattery* battery,
+                                    const char* clock_text);
+
+// Margarida's commute: Stratford Intl <-> London <-> Cambridge connections
+// with live and timetable times, plus a weather line.
+void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
+                                 const zectrix_weather_data_t* weather,
+                                 const zectrix_commute_data_t* commute,
+                                 const ZectrixDashboardBattery* battery,
+                                 const char* clock_text);
+
+// Boot screen: wordmark above a station platform edge, with a status line
+// (e.g. "Connecting to Wi-Fi..."). Gray areas dither on a 1bpp refresh.
+void ZectrixDashboardDrawSplash(ZectrixCanvas& canvas, const char* status);
+
 // Screen left on the panel during the overnight deep sleep: weather (left),
 // night status and battery (right), picks (bottom). updated_text is the
 // local "HH:MM" of the last refresh.

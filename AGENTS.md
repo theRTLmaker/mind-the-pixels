@@ -43,15 +43,26 @@ Intended public repository name: `mind-the-pixels`.
 
 ## Architecture
 
-- `main/app_main.cc`: app flow and menus. `RunDashboard()` fetches data,
-  calls the view, refreshes the panel and runs the clock/train update loop.
+- `main/app_main.cc`: the `MindThePixels` app. Boot splash, Wi-Fi, then
+  three screens (Dashboard, Coming up, Commute) switched with UP/DOWN; OK
+  refreshes, long DOWN shuts down. `Loop()` refetches weather/events every
+  15 min (full gray redraw on change), updates the dashboard train card and
+  the commute header/rows (every 2 min) with partials, the clock each
+  minute, and enters night sleep. The upstream demo menu, gallery, assets
+  and self-tests were removed (2026-10-31).
 - `components/zectrix_dashboard_view/`: **all dashboard layout and drawing**.
   It only touches `ZectrixCanvas` and the weather/train data structs, so it
   compiles both for the ESP32 and for the Mac. Keep ESP-IDF runtime calls
   (networking, FreeRTOS, logging, refresh) out of it.
-- `components/zectrix_demo_ui/zectrix_canvas.*`: 1bpp canvas (1 = white,
-  MSB first) with pixel, rect, Bresenham line and TRMNL16 bitmap text
-  (proportional 16 px font, ASCII only, integer scaling).
+- `components/zectrix_demo_ui/`: `zectrix_canvas.*` (1bpp + 4bpp gray
+  canvas, TRMNL16 bitmap text, ASCII plus "£") and `zectrix_panel.*`
+  (`ZectrixPanel`: 1bpp/gray full refresh and 1bpp partials over a gray
+  base).
+- `components/zectrix_dashboard_commute/`: Margarida's commute. Before
+  14:00 SFA->STP plus STP/KGX->CBG boards, after that CBG->STP/KGX plus
+  STP->SFA, via `zectrix_rdm_board_json()` from the trains component;
+  combines legs with 8 min (same station) / 12 min (St Pancras <-> King's
+  Cross) changes, earliest live arrival first.
 - `components/zectrix_dashboard_{wifi,weather,trains}/`: data sources.
   Weather is Open-Meteo for 51.5072, -0.1276, Europe/London. Trains come
   from the Rail Data Marketplace Live Departure Board (Staff Version,
@@ -66,8 +77,8 @@ Intended public repository name: `mind-the-pixels`.
   `CONFIG_ZECTRIX_EVENTS_URL` (a secret gist, gitignored `sdkconfig`) with
   the weather every 15 min and keeps up to four `screen` lines. The file is
   written daily by the local scheduled task `mind-the-pixels-events`.
-- `ZectrixCanvas::Text` also draws UTF-8 "£" (hand-drawn glyph in
-  `zectrix_canvas.cc`); `TextGray` in the view is ASCII only.
+- `ZectrixCanvas::Text` and `TextGray` also draw UTF-8 "£" (hand-drawn
+  glyph in `zectrix_canvas.cc`).
 - Partial refresh regions are byte-aligned and exported from the view header
   (`kDashboardTrainsRefreshRect`, `kDashboardClockRefreshRect`). If you move
   the clock or train card, update them.
@@ -75,18 +86,21 @@ Intended public repository name: `mind-the-pixels`.
   `host_include/` stand-ins for `esp_err.h` and the SPI/GPIO driver headers,
   fixtures in `fixtures.h`, PNG output in `simulator/out/`.
 
-Layout today: weather (8, 8, 232×140), clock top-right centred on x=312
-with the battery icon at (366, 12) in the same partial window, trains
-(248, 34, 144×114), events (8, 158, 384×132).
+Dashboard layout: weather (8, 8, 232×140), clock top-right centred on
+x=312 with the battery icon at (366, 12) in the same partial window, trains
+(248, 34, 144×114), events (8, 158, 384×132). Other screens and their
+partial windows (`kEventsClockRefreshRect`, `kCommuteHeaderRefreshRect`,
+`kCommuteRowsRefreshRect`) are in the view header; the commute header and
+rows are pure black and white for that reason.
 
-Night mode (`main/app_main.cc`): from 22:00 to 05:00, once the dashboard
-has been open 10 minutes, the board draws the night screen
+Night mode (`main/app_main.cc`): from 22:00 to 05:00, after 10 minutes
+without a button press on any screen, the board draws the night screen
 (`ZectrixDashboardDrawNight`: weather, picks, battery) and deep-sleeps to
 the next full hour. The PCF8563 (set to UTC) alarm on RTC_INT wakes it, with
 an RC-timer backup 10 minutes later; each night wake restores the time from
 the PCF8563, fetches weather and picks (last good copies live in
-`RTC_DATA_ATTR` globals) and sleeps again. OK (GPIO0) wakes into the
-dashboard; the 05:00 wake goes to the dashboard too. Deep sleep drops the
+`RTC_DATA_ATTR` globals) and sleeps again. OK (GPIO0) wakes back into
+the last screen (kept in RTC memory); the 05:00 wake does too. Deep sleep drops the
 USB serial port, so flashing during the night needs a button wake first.
 
 ## Working style

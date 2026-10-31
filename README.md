@@ -9,8 +9,8 @@ which supports full-screen black/white and 16-level grayscale refreshes.
 
 Mind the Pixels is built on the
 [ZECTRIX NOTE4 E-Paper Reference Demo](https://github.com/itopinion/zectrix-note4-epd-demo)
-by Zectrix Lab, which provides the board support, display driver, bitmap font
-and hardware self-tests. See [Credits and licence](#credits-and-licence).
+by Zectrix Lab, which provides the board support, display driver and bitmap
+font. See [Credits and licence](#credits-and-licence).
 
 > [!IMPORTANT]
 > This targets the black-and-white ZECTRIX NOTE4, not the NOTE4C. Flashing
@@ -18,7 +18,22 @@ and hardware self-tests. See [Credits and licence](#credits-and-licence).
 > port before every flash, and keep a backup of the original flash outside
 > this repository.
 
-## What it shows
+## Screens
+
+UP and DOWN switch between three screens; OK refreshes the current one and
+holding DOWN switches the board off. The board boots on a "Mind the Pixels"
+splash, then the dashboard.
+
+1. **Dashboard**: weather, clock, trains to St Pancras and four picks (below).
+2. **Coming up**: the curated picks full screen, with when, price and venue.
+3. **Commute**: Margarida's journey between Stratford International and
+   Cambridge, changing at St Pancras (Thameslink) or King's Cross (Great
+   Northern). Before 14:00 it shows the way there, after that the way home:
+   up to four connections with live times (inverted when they differ from
+   the timetable), the timetable underneath and the time to change. It
+   needs the Rail Data Marketplace key and refreshes every 2 minutes.
+
+### Dashboard
 
 | Region | Content | Source |
 | --- | --- | --- |
@@ -26,19 +41,18 @@ and hardware self-tests. See [Credits and licence](#credits-and-licence).
 | Top right | Clock (UK time via SNTP) and next three departures Stratford → St Pancras, with revised times, delays, cancellations and typical busyness | [Rail Data Marketplace](https://raildata.org.uk/) Live Departure Board (Staff Version), falling back to [Huxley2](https://huxley2.azurewebsites.net/); both National Rail Darwin |
 | Bottom | "Coming up": four curated London picks (exhibitions, jazz, classical, theatre deals, markets) with FREE/DEAL/BOOK tags | An `events.json` you publish (e.g. a secret gist), see [Events](#events) |
 
-The weather and events are fetched when the dashboard opens and every 15
-minutes after that; trains refresh in the background every 60 seconds and keep the last
+The weather and events are fetched at start and every 15 minutes after
+that; trains refresh in the background every 60 seconds and keep the last
 good data if a refresh fails. The dashboard is drawn with a 16-gray full
 refresh; the clock and train card update with black-and-white partial
 refreshes.
 
-A battery icon sits beside the clock (a bolt while charging). From 22:00 to
-05:00 the dashboard switches to a night screen (weather, picks, battery)
-and deep-sleeps, waking once an hour on the board's RTC alarm to refresh
-the weather; press OK to bring the full dashboard back for 10 minutes.
-
-The upstream demo's menu is still available: Dashboard, Auto Showcase,
-Display Gallery, Hardware Tests, Device Info and About & License.
+A battery icon sits beside the clock on every screen (a bolt while
+charging). From 22:00 to 05:00, after 10 minutes without a button press,
+the board switches to a night screen (weather, picks, battery) and
+deep-sleeps, waking once an hour on the board's RTC alarm to refresh the
+weather; press OK to bring the screens back for 10 minutes. At 05:00 it
+returns to the screen it was on.
 
 ## Hardware
 
@@ -134,19 +148,19 @@ contrast and paper tone still need checking on the device.
 ## Repository layout
 
 ```text
-main/app_main.cc                    App flow, menus, dashboard loop
+main/app_main.cc                    Screens, buttons, refresh loop, night sleep
 components/zectrix_dashboard_view/  Dashboard layout and drawing (shared with the simulator)
 components/zectrix_dashboard_wifi/  Wi-Fi station connection
 components/zectrix_dashboard_weather/ Open-Meteo client
 components/zectrix_dashboard_trains/  Departure board client and background refresh
 components/zectrix_dashboard_events/  Curated events.json client
-components/zectrix_demo_ui/         Canvas, bitmap font, menu UI        (upstream)
+components/zectrix_dashboard_commute/ Stratford <-> Cambridge connections
+components/zectrix_demo_ui/         Canvas, bitmap font, panel refresh  (upstream, trimmed)
 components/zectrix_epd/             SSD2683 display driver              (upstream)
 components/zectrix_board/           Board pins and peripherals          (upstream)
-components/zectrix_self_test/       Hardware self-tests                 (upstream)
 simulator/                          Mac simulator
 docs/                               Upstream hardware and API guides
-tools/                              Asset and font conversion scripts   (upstream)
+tools/                              Bitmap font generator               (upstream)
 ```
 
 The display driver API is documented in [docs/EPD_API.md](docs/EPD_API.md)
@@ -154,7 +168,7 @@ and the hardware in [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ## Roadmap
 
-- Overnight sleep and slower refreshes off-peak to save battery
+- Switching screens with NFC (e.g. phone + tags through a small web endpoint)
 
 ## Credits and licence
 
@@ -163,9 +177,12 @@ Reference Demo, Copyright (c) 2026 Zectrix Lab. Upstream code and the
 changes below (Copyright (c) 2026 Francisco Mendes) are released under the
 [MIT License](LICENSE); upstream notices are kept unchanged.
 The original README is preserved at
-[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md) ([中文](README_zh.md)).
+[docs/UPSTREAM_README.md](docs/UPSTREAM_README.md)
+([中文](docs/UPSTREAM_README_zh.md)); its demo menu, image gallery and
+hardware self-tests were removed here and remain in the upstream repository.
 
-Changes from upstream: the dashboard, Wi-Fi, weather and train components,
+Changes from upstream: the screens and night mode, the Wi-Fi, weather,
+train, events and commute components,
 the shared dashboard view, the Mac simulator, and related edits to
 `main/app_main.cc` and the build configuration.
 
