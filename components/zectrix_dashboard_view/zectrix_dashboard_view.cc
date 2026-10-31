@@ -744,7 +744,7 @@ void ZectrixDashboardDrawCommute(ZectrixCanvas& canvas,
     canvas.Text(76, 4, outbound ? "To Cambridge" : "Home from Cambridge");
     if (commute != nullptr && commute->valid) {
         char updated[32];
-        std::snprintf(updated, sizeof(updated), "Live times, updated %s",
+        std::snprintf(updated, sizeof(updated), "Updated %s",
                       commute->updated);
         canvas.Text(76, 24, updated);
     }

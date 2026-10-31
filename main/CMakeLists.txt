@@ -4,8 +4,6 @@ idf_component_register(SRCS "app_main.cc"
                        zectrix_demo_ui
                        zectrix_epd
                        esp_timer
-                       heap
-                       json
                        zectrix_dashboard_wifi
                        zectrix_dashboard_weather
                        zectrix_dashboard_trains

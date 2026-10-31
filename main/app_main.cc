@@ -17,9 +17,7 @@
 #include <ctime>
 
 #include "driver/rtc_io.h"
-#include "cJSON.h"
 #include "esp_attr.h"
-#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_sntp.h"
@@ -90,13 +88,6 @@ void StartClockSync() {
     }
 }
 
-// cJSON allocates one small block per value, which would land in the
-// scarce internal RAM; the commute boards (100+ KB of JSON) need PSRAM.
-void* JsonMalloc(size_t size) {
-    void* block = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    return block != nullptr ? block : malloc(size);
-}
-
 zectrix_epd_rect_t ToEpdRect(const ZectrixDashboardRect& rect) {
     return {rect.x, rect.y, rect.width, rect.height};
 }
@@ -104,9 +95,6 @@ zectrix_epd_rect_t ToEpdRect(const ZectrixDashboardRect& rect) {
 class MindThePixels {
 public:
     void Run() {
-        cJSON_Hooks hooks = {JsonMalloc, free};
-        cJSON_InitHooks(&hooks);
-
         esp_err_t err = board_.Init();
         if (err != ESP_OK) {
             ESP_LOGE(kTag, "board initialization failed: %s",

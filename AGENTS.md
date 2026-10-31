@@ -62,12 +62,15 @@ Intended public repository name: `mind-the-pixels`.
 - `components/zectrix_dashboard_outlook/`: Open-Meteo 8-day forecast
   (picks the coming Saturday/Sunday) plus air quality and pollen, and the
   moon phase computed locally; fetched at most hourly.
-- `components/zectrix_http/`: shared `zectrix_http_get()` used by the
-  trains, commute and outlook data (weather and events still have their
+- `components/zectrix_http/`: shared `zectrix_http_get()` and streaming
+  `zectrix_http_get_stream()`, used by the trains, commute and outlook data (weather and events still have their
   own small clients).
 - `components/zectrix_dashboard_commute/`: Margarida's commute. Before
   14:00 SFA->STP plus STP/KGX->CBG boards, after that CBG->STP/KGX plus
-  STP->SFA, via `zectrix_rdm_board_json()` from the trains component;
+  STP->SFA. Boards with details are 90-170 KB (every calling point and
+  coach), so they are streamed (`zectrix_rdm_board_stream()` ->
+  `zectrix_http_get_stream()`) into `BoardStream` (`board_stream.cc`, plain
+  C++, testable on the host), which keeps only departure/arrival times;
   combines legs with 8 min (same station) / 12 min (St Pancras <-> King's
   Cross) changes, earliest live arrival first.
 - `components/zectrix_dashboard_{wifi,weather,trains}/`: data sources.

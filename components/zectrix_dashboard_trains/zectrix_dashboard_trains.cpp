@@ -239,13 +239,15 @@ void TrainRefreshTask(void *) {
 }
 }  // namespace
 
-extern "C" char *zectrix_rdm_board_json(const char *crs, const char *query) {
+extern "C" bool zectrix_rdm_board_stream(const char *crs, const char *query,
+                                         zectrix_http_chunk_cb on_chunk,
+                                         void *context) {
     if (kRdmApiKey[0] == '\0' || crs == nullptr || query == nullptr) {
-        return nullptr;
+        return false;
     }
     const time_t now = time(nullptr);
     if (now < 1700000000) {
-        return nullptr;
+        return false;
     }
     struct tm local_time = {};
     localtime_r(&now, &local_time);
@@ -255,11 +257,9 @@ extern "C" char *zectrix_rdm_board_json(const char *crs, const char *query) {
     const int written = snprintf(url, sizeof(url), "%s/%s/%s?%s", kRdmUrl,
                                  crs, board_time, query);
     if (written <= 0 || static_cast<size_t>(written) >= sizeof(url)) {
-        return nullptr;
+        return false;
     }
-    // Boards with details list every calling point and coach: a King's
-    // Cross board of 8 trains is ~130 KB. The buffer lands in PSRAM.
-    return zectrix_http_get(url, kRdmApiKey, 256 * 1024);
+    return zectrix_http_get_stream(url, kRdmApiKey, on_chunk, context);
 }
 
 extern "C" esp_err_t zectrix_dashboard_trains_start(void) {

@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include "esp_err.h"
+#include "zectrix_http.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,12 +29,13 @@ typedef struct {
 
 esp_err_t zectrix_dashboard_trains_start(void);
 
-// Raw Rail Data Marketplace GetDepBoardWithDetails JSON for station crs at
-// the current time, with query appended (e.g. "numRows=6&filterCRS=CBG&
-// filterType=to"). Returns a malloc'd body the caller frees, or NULL when no
-// API key is set, the clock is not synced or the request fails. Bodies can
-// exceed 100 KB; parse them with cJSON allocating from PSRAM.
-char *zectrix_rdm_board_json(const char *crs, const char *query);
+// Streams the Rail Data Marketplace GetDepBoardWithDetails JSON for station
+// crs at the current time, with query appended (e.g. "numRows=6&filterCRS=
+// CBG&filterType=to"), to on_chunk as it arrives: these boards run to 100+
+// KB. Returns false when no API key is set, the clock is not synced or the
+// request fails.
+bool zectrix_rdm_board_stream(const char *crs, const char *query,
+                              zectrix_http_chunk_cb on_chunk, void *context);
 bool zectrix_dashboard_trains_get(zectrix_trains_data_t *out);
 
 #ifdef __cplusplus

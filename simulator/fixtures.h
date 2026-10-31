@@ -269,7 +269,7 @@ inline const std::vector<Scenario>& Scenarios() {
          &kPicks, {true, 64, false, false}, true},
         {"splash", "Boot screen", true, {}, kLoading, "--:--"},
         {"commute", "Margarida to Cambridge (illustrative times)", true,
-         Weather(61, 9.7f, 7.2f, 7, 11, 90, 93, 24), kLoading, "07:12"},
+         Weather(2, 10.6f, 9.1f, 7, 11, 90, 93, 24), kLoading, "07:12"},
         {"events-full", "Full-screen Coming up, page 1", true, {}, kLoading,
          "18:40", &kFullPicks},
         {"weekend", "This weekend: forecast, picks, daylight and air", true,

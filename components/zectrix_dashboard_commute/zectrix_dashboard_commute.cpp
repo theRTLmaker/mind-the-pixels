@@ -8,7 +8,7 @@
 #include <ctime>
 #include <vector>
 
-#include "cJSON.h"
+#include "board_stream.h"
 #include "esp_log.h"
 #include "zectrix_dashboard_trains.h"
 
@@ -18,15 +18,7 @@ constexpr char kTag[] = "dashboard_commute";
 // Outbound (Stratford Intl -> Cambridge) before this local hour, home after.
 constexpr int kReturnFromHour = 14;
 
-// One leg from a departure board: times in minutes since 1970 (local).
-struct Leg {
-    char from[4];
-    char to[4];
-    int64_t dep;
-    int64_t dep_expected;
-    int64_t arr;
-    int64_t arr_expected;
-};
+using Leg = BoardLeg;
 
 // Minutes to change in London. St Pancras high level (HS1) to the
 // Thameslink platforms below is quick; St Pancras <-> King's Cross means
@@ -35,103 +27,30 @@ int ChangeMinutes(const char* arrive_at, const char* depart_from) {
     return strcmp(arrive_at, depart_from) == 0 ? 8 : 12;
 }
 
-// "2026-11-02T07:31:30" -> minutes since 1970 (fields taken as given).
-bool ParseMinutes(const cJSON* value, int64_t* out) {
-    if (!cJSON_IsString(value) || value->valuestring == nullptr) {
-        return false;
-    }
-    int year = 0, month = 0, day = 0, hour = 0, minute = 0;
-    if (sscanf(value->valuestring, "%d-%d-%dT%d:%d", &year, &month, &day,
-               &hour, &minute) != 5) {
-        return false;
-    }
-    year -= month <= 2 ? 1 : 0;
-    const int era = (year >= 0 ? year : year - 399) / 400;
-    const int year_of_era = year - era * 400;
-    const int day_of_year =
-        (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
-    const int day_of_era = year_of_era * 365 + year_of_era / 4 -
-                           year_of_era / 100 + day_of_year;
-    const int64_t days = era * 146097LL + day_of_era - 719468;
-    *out = days * 1440 + hour * 60 + minute;
-    return true;
-}
-
 void FormatMinutes(int64_t minutes, char out[6]) {
     const int of_day = static_cast<int>(((minutes % 1440) + 1440) % 1440);
     snprintf(out, 6, "%02d:%02d", of_day / 60, of_day % 60);
 }
 
-const cJSON* Field(const cJSON* object, const char* name) {
-    return cJSON_GetObjectItemCaseSensitive(object, name);
+void FeedBoard(void* context, const char* data, size_t length) {
+    static_cast<BoardStream*>(context)->Feed(data, length);
 }
 
 // Departures from board station `from` that call at one of `targets`
-// (space-separated CRS codes), skipping cancelled and departed trains.
-void ParseBoard(const char* body, const char* from, const char* targets,
-                std::vector<Leg>* legs) {
-    cJSON* root = cJSON_Parse(body);
-    if (root == nullptr) {
-        ESP_LOGW(kTag, "Could not parse %s board", from);
-        return;
-    }
-    const cJSON* service = nullptr;
-    cJSON_ArrayForEach(service, Field(root, "trainServices")) {
-        const cJSON* departure_type = Field(service, "departureType");
-        if (cJSON_IsTrue(Field(service, "isCancelled")) ||
-            cJSON_IsString(Field(service, "atd")) ||
-            (cJSON_IsString(departure_type) &&
-             strcmp(departure_type->valuestring, "Actual") == 0)) {
-            continue;
-        }
-        Leg leg = {};
-        snprintf(leg.from, sizeof(leg.from), "%s", from);
-        if (!ParseMinutes(Field(service, "std"), &leg.dep)) {
-            continue;
-        }
-        if (!ParseMinutes(Field(service, "etd"), &leg.dep_expected)) {
-            leg.dep_expected = leg.dep;
-        }
-
-        bool found = false;
-        const cJSON* location = nullptr;
-        cJSON_ArrayForEach(location, Field(service, "subsequentLocations")) {
-            const cJSON* crs = Field(location, "crs");
-            if (!cJSON_IsString(crs) || strlen(crs->valuestring) != 3 ||
-                strstr(targets, crs->valuestring) == nullptr ||
-                cJSON_IsTrue(Field(location, "isCancelled"))) {
-                continue;
-            }
-            if (!ParseMinutes(Field(location, "sta"), &leg.arr)) {
-                break;
-            }
-            if (!ParseMinutes(Field(location, "eta"), &leg.arr_expected) &&
-                !ParseMinutes(Field(location, "ata"), &leg.arr_expected)) {
-                leg.arr_expected = leg.arr + (leg.dep_expected - leg.dep);
-            }
-            snprintf(leg.to, sizeof(leg.to), "%s", crs->valuestring);
-            found = true;
-            break;
-        }
-        if (found) {
-            legs->push_back(leg);
-        }
-    }
-    cJSON_Delete(root);
-}
-
+// (space-separated CRS codes), read as the response streams in.
 bool FetchBoard(const char* from, const char* filter, const char* targets,
                 int rows, std::vector<Leg>* legs) {
     char query[96];
     snprintf(query, sizeof(query),
              "numRows=%d&filterCRS=%s&filterType=to&timeWindow=150", rows,
              filter);
-    char* body = zectrix_rdm_board_json(from, query);
-    if (body == nullptr) {
+    BoardStream stream(from, targets);
+    if (!zectrix_rdm_board_stream(from, query, FeedBoard, &stream) ||
+        !stream.complete()) {
+        ESP_LOGW(kTag, "%s board incomplete", from);
         return false;
     }
-    ParseBoard(body, from, targets, legs);
-    free(body);
+    legs->insert(legs->end(), stream.legs().begin(), stream.legs().end());
     return true;
 }
 
@@ -155,7 +74,8 @@ zectrix_dashboard_commute_fetch(zectrix_commute_data_t* out) {
     bool ok = true;
     if (outbound) {
         // Thameslink and Great Northern boards are ~16 KB per train with
-        // details, so ask for only as many as the connections need.
+        // details; they are streamed, but fewer rows still means less
+        // waiting.
         ok &= FetchBoard("SFA", "STP", "STP", 6, &first);
         ok &= FetchBoard("STP", "CBG", "CBG", 6, &second);
         ok &= FetchBoard("KGX", "CBG", "CBG", 8, &second);
